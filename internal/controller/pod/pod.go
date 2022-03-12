@@ -3,8 +3,12 @@ package pod
 import (
 	"context"
 	"fmt"
+	"net"
+	"strings"
 
-	netbox "github.com/netbox-community/go-netbox/netbox/client"
+	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
+	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
+
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -15,23 +19,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// Controller is responsible for updating IPs of a single k8s resource.
-type Controller struct {
+type controller struct {
 	reconciler *reconciler
 }
 
-// New returns a new Controller.
-func New(netboxClient *netbox.NetBoxAPI) *Controller {
-	return &Controller{
+// New returns a new Controller for pods.
+func New(netboxClient netbox.Client, opts ...ctrl.Option) (ctrl.Controller, error) {
+	s := &ctrl.Settings{
+		NetboxClient: netboxClient,
+	}
+	for _, o := range opts {
+		if err := o(s); err != nil {
+			return nil, err
+		}
+	}
+
+	return &controller{
 		reconciler: &reconciler{
 			netboxClient: netboxClient,
+			tags:         s.Tags,
+			labels:       s.Labels,
 		},
-	}
+	}, nil
 }
 
 var filter = predicate.Funcs{
 	CreateFunc: func(e event.CreateEvent) bool {
 		return e.Object != nil
+		// return false
 	},
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		return e.ObjectNew != nil
@@ -44,7 +59,7 @@ var filter = predicate.Funcs{
 }
 
 // AddToManager attaches the controller to the given manager.
-func (c *Controller) AddToManager(mgr manager.Manager) error {
+func (c *controller) AddToManager(mgr manager.Manager) error {
 	return builder.
 		ControllerManagedBy(mgr).
 		Named("pod").
@@ -54,9 +69,11 @@ func (c *Controller) AddToManager(mgr manager.Manager) error {
 }
 
 type reconciler struct {
-	netboxClient *netbox.NetBoxAPI
+	netboxClient netbox.Client
 	// client can be used to retrieve objects from the kubernetes APIServer
 	client client.Client
+	tags   []netbox.Tag
+	labels map[string]bool
 }
 
 // InjectClient injects the client and implements inject.Client.
@@ -83,12 +100,34 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err != nil {
 		if client.IgnoreNotFound(err) != nil {
 			ll.Error("failed to retrieve pod", log.Error(err))
-			return reconcile.Result{}, fmt.Errorf("failed to retrieve pod: %s", err)
+			return reconcile.Result{}, fmt.Errorf("retrieving pod: %w", err)
 		}
 		return reconcile.Result{}, nil
 	}
 
-	// TODO: actually do something
+	if pod.Status.PodIP == "" {
+		return reconcile.Result{}, nil
+	}
+
+	var labels []string
+	for key, value := range pod.Labels {
+		if r.labels[key] {
+			labels = append(labels, fmt.Sprintf("%s: %s", key, value))
+		}
+	}
+
+	ll = ll.With(log.String("ip", pod.Status.PodIP))
+
+	_, err = r.netboxClient.UpsertIP(ctx, &netbox.IPAddress{
+		UID:         string(pod.UID),
+		DNSName:     pod.Name,
+		Address:     net.ParseIP(pod.Status.PodIP),
+		Tags:        r.tags,
+		Description: strings.Join(labels, ", "),
+	})
+	if err != nil {
+		ll.Error("reconciling pod IP", log.Error(err))
+	}
 
 	return reconcile.Result{}, nil
 }

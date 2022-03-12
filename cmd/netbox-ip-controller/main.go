@@ -2,16 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/url"
+	"strings"
 
+	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	podctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/pod"
+	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	"github.com/go-logr/zapr"
-	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/ianschenck/envflag"
-	netbox "github.com/netbox-community/go-netbox/netbox/client"
 	log "go.uber.org/zap"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,10 +21,14 @@ import (
 const name = "netbox-ip-controller"
 
 type config struct {
-	metricsAddr  string
-	kubeConfig   *rest.Config
-	netboxAPIURL string
-	netboxToken  string
+	metricsAddr   string
+	kubeConfig    *rest.Config
+	netboxAPIURL  string
+	netboxToken   string
+	podTags       []string
+	serviceTags   []string
+	podLabels     map[string]bool
+	serviceLabels map[string]bool
 }
 
 func main() {
@@ -42,18 +45,10 @@ func main() {
 }
 
 func realMain(ctx context.Context, cfg *config) error {
-	u, err := url.Parse(cfg.netboxAPIURL)
+	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken)
 	if err != nil {
-		return fmt.Errorf("failed to parse NetBox URL: %s", err)
-	} else if !u.IsAbs() {
-		return errors.New("NetBox URL must be in scheme://host:port format")
+		return err
 	}
-
-	transport := httptransport.New(u.Hostname(), u.Path, []string{u.Scheme})
-	transport.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", "Token "+cfg.netboxToken)
-	transport.SetDebug(true)
-
-	netboxClient := netbox.New(transport, nil)
 
 	mgr, err := manager.New(cfg.kubeConfig, manager.Options{
 		Logger:             zapr.NewLogger(log.L().Named(name)),
@@ -64,7 +59,11 @@ func realMain(ctx context.Context, cfg *config) error {
 	}
 	log.L().Info("created manager")
 
-	if err := podctrl.New(netboxClient).AddToManager(mgr); err != nil {
+	podController, err := podctrl.New(netboxClient, ctrl.WithTags(cfg.podTags), ctrl.WithLabels(cfg.podLabels))
+	if err != nil {
+		return fmt.Errorf("initializing pod controller: %s", err)
+	}
+	if err := podController.AddToManager(mgr); err != nil {
 		return fmt.Errorf("could not create controller for pod IPs: %s", err)
 	}
 
@@ -76,10 +75,16 @@ func realMain(ctx context.Context, cfg *config) error {
 }
 
 func setupConfig() (*config, error) {
-	var cfg config
-	var kubeConfigFile string
-	var kubeQPS float64
-	var kubeBurst int
+	var (
+		cfg              config
+		kubeConfigFile   string
+		kubeQPS          float64
+		kubeBurst        int
+		podTagsStr       string
+		serviceTagsStr   string
+		podLabelsStr     string
+		serviceLabelsStr string
+	)
 
 	envflag.StringVar(&cfg.metricsAddr, "METRICS_ADDR", "8001", "the port on which to serve metrics")
 	envflag.StringVar(&cfg.netboxAPIURL, "NETBOX_API_URL", "", "URL of the NetBox API server to connect to (scheme://host:port/path)")
@@ -87,8 +92,14 @@ func setupConfig() (*config, error) {
 	envflag.StringVar(&kubeConfigFile, "KUBE_CONFIG", "", "absolute path to the kubeconfig file specifying the kube-apiserver instance; leave empty if the controller is running in-cluster")
 	envflag.Float64Var(&kubeQPS, "KUBE_QPS", 20.0, "maximum number of requests per second to the kube-apiserver")
 	envflag.IntVar(&kubeBurst, "KUBE_BURST", 30, "maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins")
+	envflag.StringVar(&podTagsStr, "POD_IP_TAGS", "kubernetes,pod", "comma-separated list of tags to add to pod IPs in NetBox")
+	envflag.StringVar(&serviceTagsStr, "SERVICE_IP_TAGS", "kubernetes,service", "comma-separated list of tags to add to service IPs in NetBox")
+	envflag.StringVar(&podLabelsStr, "POD_PUBLISH_LABELS", "app", "comma-separated list of pod labels that should be added to the IP description in NetBox")
+	envflag.StringVar(&serviceLabelsStr, "SERVICE_PUBLISH_LABELS", "app", "comma-separated list of service labels that should be added to the IP description in NetBox")
 
 	envflag.Parse()
+
+	// TODO(dasha): validation for flags?
 
 	kubeConfig, err := kubeConfig(kubeConfigFile)
 	if err != nil {
@@ -97,6 +108,19 @@ func setupConfig() (*config, error) {
 	cfg.kubeConfig = kubeConfig
 	cfg.kubeConfig.QPS = float32(kubeQPS)
 	cfg.kubeConfig.Burst = kubeBurst
+
+	// TODO(dasha): maybe trim spaces around those tags?
+	cfg.podTags = strings.Split(podTagsStr, ",")
+	cfg.serviceTags = strings.Split(serviceTagsStr, ",")
+
+	cfg.podLabels = make(map[string]bool)
+	cfg.serviceLabels = make(map[string]bool)
+	for _, l := range strings.Split(podLabelsStr, ",") {
+		cfg.podLabels[l] = true
+	}
+	for _, l := range strings.Split(serviceLabelsStr, ",") {
+		cfg.serviceLabels[l] = true
+	}
 
 	return &cfg, nil
 }
