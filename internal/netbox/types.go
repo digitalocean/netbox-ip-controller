@@ -93,11 +93,19 @@ func (tag *Tag) validate() error {
 type IPAddress struct {
 	id int64
 	// UID is the UID of the object that this IP is assigned to.
-	UID         string
-	DNSName     string
+	UID     string
+	DNSName string
+	// TODO(dasha): in go 1.18, there's a new net/netip package with
+	// a better (immutable and comparable) netip.Addr
 	Address     net.IP
 	Tags        []Tag
 	Description string
+}
+
+// IPAddressKey is used to uniquely identify an IP address.
+type IPAddressKey struct {
+	UID     string
+	DNSName string
 }
 
 func ipAddressFromNetBox(netboxIP *models.IPAddress) *IPAddress {

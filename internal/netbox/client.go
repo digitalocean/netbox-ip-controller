@@ -28,8 +28,9 @@ const UIDCustomFieldName = "netbox_ip_controller__uid"
 type Client interface {
 	GetTagByName(ctx context.Context, tag string) (*Tag, error)
 	CreateTag(ctx context.Context, tag string) (*Tag, error)
-	GetIPByUID(ctx context.Context, uid, dnsName string) (*IPAddress, error)
+	GetIP(ctx context.Context, key IPAddressKey) (*IPAddress, error)
 	UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error)
+	DeleteIP(ctx context.Context, key IPAddressKey) error
 	CreateUIDField(ctx context.Context) error
 }
 
@@ -155,11 +156,10 @@ func (c *client) CreateTag(ctx context.Context, tag string) (*Tag, error) {
 	return tagFromNetBox(res.GetPayload()), nil
 }
 
-// GetIPByUID returns an IP address assigned to the object with the given
-// UID, and with the given DNS name.
-func (c *client) GetIPByUID(ctx context.Context, uid, dnsName string) (*IPAddress, error) {
+// GetIP returns an IP address with the given UID and DNS name.
+func (c *client) GetIP(ctx context.Context, key IPAddressKey) (*IPAddress, error) {
 	params := ipam.NewIpamIPAddressesListParamsWithContext(ctx)
-	params.SetDNSName(&dnsName)
+	params.SetDNSName(&key.DNSName)
 	var limit int64 = 100
 	params.SetLimit(pointer.Int64(limit))
 
@@ -176,7 +176,7 @@ func (c *client) GetIPByUID(ctx context.Context, uid, dnsName string) (*IPAddres
 
 		for _, netboxIP := range res.GetPayload().Results {
 			ip := ipAddressFromNetBox(netboxIP)
-			if ip.UID == uid {
+			if ip.UID == key.UID {
 				return ip, nil
 			}
 		}
@@ -193,7 +193,7 @@ func (c *client) GetIPByUID(ctx context.Context, uid, dnsName string) (*IPAddres
 }
 
 // UpsertIP creates an IP address or updates one, if an IP with the same
-// UID already exists.
+// UID and DNS name already exists.
 func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error) {
 	// validation errors returned by go-netbox client don't give any details
 	// beyond the 400 status code; so, do our own validation to provide
@@ -202,7 +202,7 @@ func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error
 		return nil, fmt.Errorf("validating IP: %w", err)
 	}
 
-	existingIP, err := c.GetIPByUID(ctx, ip.UID, ip.DNSName)
+	existingIP, err := c.GetIP(ctx, IPAddressKey{UID: ip.UID, DNSName: ip.DNSName})
 	if err != nil {
 		return nil, err
 	}
@@ -234,4 +234,24 @@ func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error
 	}
 
 	return ipAddressFromNetBox(res.GetPayload()), nil
+}
+
+// DeleteIP deletes an IP with the given UID and DNS name from NetBox.
+func (c *client) DeleteIP(ctx context.Context, key IPAddressKey) error {
+	ip, err := c.GetIP(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	if ip == nil {
+		return nil
+	}
+
+	params := ipam.NewIpamIPAddressesDeleteParamsWithContext(ctx)
+	params.SetID(ip.id)
+
+	if _, err := c.Ipam.IpamIPAddressesDelete(params, nil); err != nil {
+		return fmt.Errorf("cannot delete IP: %w", err)
+	}
+	return nil
 }

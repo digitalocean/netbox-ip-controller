@@ -14,8 +14,3 @@ Under development.
 `KUBE_CONFIG` | | Path to the kubeconfig file containing the address of the kube-apiserver to connect to and authentication info. The cluster you want the controller to connect to should be set as current context in the kubeconfig. Leave empty if the controller is running in-cluster. Optional.
 `KUBE_QPS` | `20` | Maximum number of requests per second to the kube-apiserver. Optional.
 `KUBE_BURST` | `30` | Maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins. Optional.
-
-
-TODO: if using finalizers, should set up some "uninstall" script - 
-otherwise when someone tries to remove the controller from their cluster,
-they will have pods stuck unable to be deleted

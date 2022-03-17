@@ -44,9 +44,9 @@ func (c *fakeClient) CreateTag(_ context.Context, tag string) (*Tag, error) {
 	return &t, nil
 }
 
-// GetIPByUID returns an IP with the given uid and DNS name from fake NetBox.
-func (c *fakeClient) GetIPByUID(_ context.Context, uid, dnsName string) (*IPAddress, error) {
-	if ip, ok := c.ips[uid]; ok && ip.DNSName == dnsName {
+// GetIP returns an IP with the given UID and DNS name from fake NetBox.
+func (c *fakeClient) GetIP(_ context.Context, key IPAddressKey) (*IPAddress, error) {
+	if ip, ok := c.ips[key.UID]; ok && ip.DNSName == key.DNSName {
 		return &ip, nil
 	}
 	return nil, nil
@@ -56,6 +56,14 @@ func (c *fakeClient) GetIPByUID(_ context.Context, uid, dnsName string) (*IPAddr
 func (c *fakeClient) UpsertIP(_ context.Context, ip *IPAddress) (*IPAddress, error) {
 	c.ips[ip.UID] = *ip
 	return ip, nil
+}
+
+// DeleteIP deletes an IP with the given UID and DNS name from fake NetBox.
+func (c *fakeClient) DeleteIP(_ context.Context, key IPAddressKey) error {
+	if ip, ok := c.ips[key.UID]; ok && ip.DNSName == key.DNSName {
+		delete(c.ips, key.UID)
+	}
+	return nil
 }
 
 // CreateUIDField is a noop.

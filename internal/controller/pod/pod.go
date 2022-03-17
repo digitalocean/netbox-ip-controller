@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 
+	netboxctrl "github.com/digitalocean/netbox-ip-controller"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
@@ -13,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -46,7 +48,6 @@ func New(netboxClient netbox.Client, opts ...ctrl.Option) (ctrl.Controller, erro
 var filter = predicate.Funcs{
 	CreateFunc: func(e event.CreateEvent) bool {
 		return e.Object != nil
-		// return false
 	},
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		return e.ObjectNew != nil
@@ -105,8 +106,52 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
+	ll = ll.With(
+		log.String("uid", string(pod.UID)),
+		log.String("ip", pod.Status.PodIP),
+	)
+
+	ipKey := netbox.IPAddressKey{
+		DNSName: pod.Name,
+		UID:     string(pod.UID),
+	}
+
+	if !pod.DeletionTimestamp.IsZero() {
+		// if deletion timestamp is set, that means the object is under deletion
+		// and waiting for finalizers to be executed
+		if err := r.netboxClient.DeleteIP(ctx, ipKey); err != nil {
+			return reconcile.Result{}, fmt.Errorf("deleting IP: %w", err)
+		}
+		ll.Info("deleted IP: pod was removed")
+
+		controllerutil.RemoveFinalizer(&pod, netboxctrl.IPFinalizer)
+		err = r.client.Update(ctx, &pod)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("removing finalizer: %w", err)
+		}
+	}
+
 	if pod.Status.PodIP == "" {
+		ip, err := r.netboxClient.GetIP(ctx, ipKey)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("checking if IP exists: %w", err)
+		}
+		if ip != nil {
+			if err := r.netboxClient.DeleteIP(ctx, ipKey); err != nil {
+				return reconcile.Result{}, fmt.Errorf("deleting IP: %w", err)
+			}
+			ll.Info("deleted IP: pod IP was removed")
+		}
+
 		return reconcile.Result{}, nil
+	}
+
+	if !controllerutil.ContainsFinalizer(&pod, netboxctrl.IPFinalizer) {
+		controllerutil.AddFinalizer(&pod, netboxctrl.IPFinalizer)
+		err := r.client.Update(ctx, &pod)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("setting finalizer: %w", err)
+		}
 	}
 
 	var labels []string
@@ -116,8 +161,6 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		}
 	}
 
-	ll = ll.With(log.String("ip", pod.Status.PodIP))
-
 	_, err = r.netboxClient.UpsertIP(ctx, &netbox.IPAddress{
 		UID:         string(pod.UID),
 		DNSName:     pod.Name,
@@ -126,8 +169,9 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		Description: strings.Join(labels, ", "),
 	})
 	if err != nil {
-		ll.Error("reconciling pod IP", log.Error(err))
+		return reconcile.Result{}, fmt.Errorf("upserting IP: %w", err)
 	}
+	ll.Info("upserted IP")
 
 	return reconcile.Result{}, nil
 }
