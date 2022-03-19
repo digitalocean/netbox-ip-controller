@@ -20,6 +20,7 @@ func NewFakeClient(tags map[string]Tag, ips map[string]IPAddress) Client {
 	}
 	return &fakeClient{
 		tags: tags,
+		ips:  ips,
 	}
 }
 

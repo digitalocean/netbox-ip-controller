@@ -206,8 +206,6 @@ func TestPodDelete(t *testing.T) {
 }
 
 func (env *testEnv) WithNamespace(namespace string, t *testing.T, f func()) {
-	deleteNamespace := func() {}
-
 	_, err := env.KubeClient.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Namespace",
@@ -223,7 +221,7 @@ func (env *testEnv) WithNamespace(namespace string, t *testing.T, f func()) {
 		return
 	}
 
-	deleteNamespace = func() {
+	deleteNamespace := func() {
 		err := env.KubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
 		if err != nil {
 			t.Errorf("deleting namespace: %q\n", err)
