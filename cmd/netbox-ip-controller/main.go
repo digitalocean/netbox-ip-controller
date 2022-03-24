@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	crd "github.com/digitalocean/netbox-ip-controller/api/netbox"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	podctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/pod"
+	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	"github.com/go-logr/zapr"
@@ -47,6 +49,15 @@ func main() {
 func realMain(ctx context.Context, cfg *config) error {
 	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken)
 	if err != nil {
+		return err
+	}
+
+	crdClient, err := crdregistration.NewClient(cfg.kubeConfig)
+	if err != nil {
+		return err
+	}
+
+	if err := crdClient.Register(ctx, crd.NetBoxIPCRD); err != nil {
 		return err
 	}
 
