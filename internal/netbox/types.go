@@ -1,25 +1,13 @@
 package netbox
 
 import (
-	"errors"
 	"fmt"
 	"net"
-	"regexp"
-	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	multierror "github.com/hashicorp/go-multierror"
 	"github.com/netbox-community/go-netbox/netbox/models"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/pointer"
-)
-
-const uidRegexpStr = "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
-
-var (
-	tagSlugRegexp = regexp.MustCompile("^[-a-zA-Z0-9_]+$")
-	uidRegexp     = regexp.MustCompile(uidRegexpStr)
 )
 
 // Tag represents a NetBox tag.
@@ -69,26 +57,6 @@ func (tag *Tag) toNetBox() *models.Tag {
 	}
 }
 
-func (tag *Tag) validate() error {
-	var result multierror.Error
-
-	if tag == nil {
-		multierror.Append(&result, errors.New("tag cannot be nil"))
-		return result.ErrorOrNil()
-	}
-	if len(tag.Name) < 1 || len(tag.Name) > 100 {
-		multierror.Append(&result, errors.New("name must be between 1 and 100 characters long"))
-	}
-	if len(tag.Slug) < 1 || len(tag.Slug) > 100 {
-		multierror.Append(&result, errors.New("slug must be between 1 and 100 characters long"))
-	}
-	if !tagSlugRegexp.MatchString(tag.Slug) {
-		multierror.Append(&result, errors.New("slug must contain only alphanumeric characters, '-', or '_'"))
-	}
-
-	return result.ErrorOrNil()
-}
-
 // IPAddress represents a NetBox IP address.
 type IPAddress struct {
 	id int64
@@ -120,8 +88,10 @@ func ipAddressFromNetBox(netboxIP *models.IPAddress) *IPAddress {
 	}
 
 	if netboxIP.Address != nil {
-		addr := strings.TrimSuffix(*netboxIP.Address, "/32")
-		ip.Address = net.ParseIP(addr)
+		addr, _, err := net.ParseCIDR(*netboxIP.Address)
+		if err == nil {
+			ip.Address = addr
+		}
 	}
 
 	if customFields, ok := netboxIP.CustomFields.(map[string]interface{}); ok {
@@ -140,9 +110,9 @@ func ipAddressFromNetBox(netboxIP *models.IPAddress) *IPAddress {
 	return ip
 }
 
-func (ip *IPAddress) toNetBox() *models.WritableIPAddress {
+func (ip *IPAddress) toNetBox() (*models.WritableIPAddress, error) {
 	if ip == nil {
-		return nil
+		return nil, nil
 	}
 
 	netboxIP := &models.WritableIPAddress{
@@ -154,8 +124,22 @@ func (ip *IPAddress) toNetBox() *models.WritableIPAddress {
 	}
 
 	if ip.Address != nil {
-		// TODO(dasha): "/32" only works for IPv4 - need to handle IPv6 as well
-		netboxIP.Address = pointer.String(fmt.Sprintf("%s/32", ip.Address.String()))
+		var cidrSuffix string
+
+		// net.IP.To4() returns nil if the address is not an IPv4 address,
+		// and net.IP.To16() - if not a valid IPv6
+		isValidIPv4 := (ip.Address.To4() != nil)
+		isValidIPv6 := (ip.Address.To16() != nil)
+
+		if isValidIPv4 && isValidIPv6 {
+			cidrSuffix = "32"
+		} else if !isValidIPv4 {
+			cidrSuffix = "128"
+		} else {
+			return nil, fmt.Errorf("%q is not a valid IPv4 or IPv6 address", ip.Address)
+		}
+
+		netboxIP.Address = pointer.String(fmt.Sprintf("%s/%s", ip.Address.String(), cidrSuffix))
 	}
 
 	if ip.UID != "" {
@@ -169,37 +153,7 @@ func (ip *IPAddress) toNetBox() *models.WritableIPAddress {
 		})
 	}
 
-	return netboxIP
-}
-
-func (ip *IPAddress) validate() error {
-	var result multierror.Error
-
-	if ip == nil {
-		multierror.Append(&result, errors.New("IP address cannot be nil"))
-		return result.ErrorOrNil()
-	}
-	if !uidRegexp.MatchString(ip.UID) {
-		multierror.Append(&result, errors.New("UID must be a valid uuid string"))
-	}
-	if errs := validation.IsDNS1123Subdomain(ip.DNSName); errs != nil {
-		for _, err := range errs {
-			multierror.Append(&result, errors.New(err))
-		}
-	}
-	if ip.Address == nil || ip.Address.IsUnspecified() {
-		multierror.Append(&result, errors.New("address must be specified"))
-	}
-	if len(ip.Description) > 200 {
-		multierror.Append(&result, errors.New("description max length is 200 characters"))
-	}
-	for _, tag := range ip.Tags {
-		if err := tag.validate(); err != nil {
-			multierror.Append(&result, fmt.Errorf("tag %s is invalid: %w", tag.Name, err))
-		}
-	}
-
-	return result.ErrorOrNil()
+	return netboxIP, nil
 }
 
 func (ip *IPAddress) changed(ip2 *IPAddress) bool {

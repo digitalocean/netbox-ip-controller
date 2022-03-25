@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
+	crdclient "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	"github.com/google/go-cmp/cmp"
@@ -101,12 +103,6 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
-		ipKey := netbox.IPAddressKey{DNSName: pod.Name, UID: string(pod.UID)}
-		ip, err := env.WaitForIP(ipKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
 		expectedIP := &netbox.IPAddress{
 			UID:     string(pod.UID),
 			DNSName: pod.Name,
@@ -118,14 +114,8 @@ func TestPodUpdate(t *testing.T) {
 			Description: "app: foo",
 		}
 
-		diff := cmp.Diff(
-			expectedIP,
-			ip,
-			cmpopts.SortSlices(func(t1, t2 netbox.Tag) bool { return t1.Name < t2.Name }),
-			cmpopts.IgnoreUnexported(netbox.IPAddress{}, netbox.Tag{}),
-		)
-		if diff != "" {
-			t.Errorf("(-want, +got)\n%s", diff)
+		if _, err := env.WaitForIP(expectedIP); err != nil {
+			t.Fatal(err)
 		}
 
 		// delete IP from pod status and expect the IP to be removed from NetBox
@@ -139,6 +129,7 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
+		ipKey := netbox.IPAddressKey{UID: string(pod.UID), DNSName: pod.Name}
 		err = env.WaitForIPDeletion(ipKey)
 		if err != nil {
 			t.Error(err)
@@ -183,9 +174,16 @@ func TestPodDelete(t *testing.T) {
 			t.Fatalf("updating pod status: %q\n", err)
 		}
 
-		// make sure the IP is there in the first place
-		ipKey := netbox.IPAddressKey{DNSName: pod.Name, UID: string(pod.UID)}
-		_, err = env.WaitForIP(ipKey)
+		expectedIP := &netbox.IPAddress{
+			UID:     string(pod.UID),
+			DNSName: pod.Name,
+			Address: net.IPv4(172, 17, 0, 1),
+			Tags: []netbox.Tag{
+				{Name: "kubernetes", Slug: "kubernetes"},
+				{Name: "pod", Slug: "pod"},
+			},
+		}
+		_, err = env.WaitForIP(expectedIP)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,6 +194,89 @@ func TestPodDelete(t *testing.T) {
 			t.Fatalf("deleting pod: %q\n", err)
 		}
 
+		ipKey := netbox.IPAddressKey{DNSName: pod.Name, UID: string(pod.UID)}
+		err = env.WaitForIPDeletion(ipKey)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	env.WithNamespace(namespace, t, testFunc)
+}
+
+func TestNetBoxIP(t *testing.T) {
+	namespace := "testnetboxip"
+
+	testFunc := func() {
+		ip := &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: "v1beta1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: namespace,
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				DNSName: "foo",
+				Tags: []v1beta1.Tag{{
+					Name: "kubernetes",
+					Slug: "kubernetes",
+				}},
+				Description: "app: foo",
+			},
+		}
+
+		// create
+		var err error
+		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Create(context.Background(), ip, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("creating netboxip: %q\n", err)
+		}
+
+		expectedIPInNetBox := &netbox.IPAddress{
+			UID:     string(ip.UID),
+			DNSName: "foo",
+			Address: net.IPv4(192, 168, 0, 1),
+			Tags: []netbox.Tag{
+				{Name: "kubernetes", Slug: "kubernetes"},
+			},
+			Description: "app: foo",
+		}
+
+		if _, err := env.WaitForIP(expectedIPInNetBox); err != nil {
+			t.Fatal(err)
+		}
+
+		// update
+		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Get(context.Background(), ip.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("retrieving netboxip for update: %q\n", err)
+		}
+
+		ip.Spec.Tags = append(ip.Spec.Tags, v1beta1.Tag{Name: "pod", Slug: "pod"})
+		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Update(context.Background(), ip, metav1.UpdateOptions{})
+		if err != nil {
+			t.Fatalf("updating netboxip: %q\n", err)
+		}
+
+		expectedIPInNetBox.Tags = append(expectedIPInNetBox.Tags, netbox.Tag{Name: "pod", Slug: "pod"})
+
+		if _, err = env.WaitForIP(expectedIPInNetBox); err != nil {
+			t.Fatal(err)
+		}
+
+		// delete
+		err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Delete(context.Background(), ip.Name, metav1.DeleteOptions{})
+		if err != nil {
+			t.Fatalf("deleting netboxip: %q\n", err)
+		}
+
+		ipKey := netbox.IPAddressKey{
+			DNSName: ip.Spec.DNSName,
+			UID:     string(ip.UID),
+		}
 		err = env.WaitForIPDeletion(ipKey)
 		if err != nil {
 			t.Error(err)
@@ -232,21 +313,34 @@ func (env *testEnv) WithNamespace(namespace string, t *testing.T, f func()) {
 	f()
 }
 
-func (env *testEnv) WaitForIP(key netbox.IPAddressKey) (*netbox.IPAddress, error) {
-	var ip *netbox.IPAddress
+func (env *testEnv) WaitForIP(ip *netbox.IPAddress) (*netbox.IPAddress, error) {
+	key := netbox.IPAddressKey{UID: ip.UID, DNSName: ip.DNSName}
+
+	var foundIP *netbox.IPAddress
 	notFoundErr := errors.New("IP not found")
-	retryNotFound := func(err error) bool { return err == notFoundErr }
+	retryNotFound := func(err error) bool { return errors.Is(err, notFoundErr) }
 	err := retry.OnError(backoff1min, retryNotFound, func() error {
 		var err error
-		ip, err = env.NetboxClient.GetIP(context.Background(), key)
+		foundIP, err = env.NetboxClient.GetIP(context.Background(), key)
 		if err != nil {
 			return err
-		} else if ip == nil {
+		} else if foundIP == nil {
 			return notFoundErr
 		}
+
+		diff := cmp.Diff(
+			ip,
+			foundIP,
+			cmpopts.SortSlices(func(t1, t2 netbox.Tag) bool { return t1.Name < t2.Name }),
+			cmpopts.IgnoreUnexported(netbox.IPAddress{}, netbox.Tag{}),
+		)
+		if diff != "" {
+			return fmt.Errorf("%w:\n (-want, +got)\n%s", notFoundErr, diff)
+		}
+
 		return nil
 	})
-	return ip, err
+	return foundIP, err
 }
 
 func (env *testEnv) WaitForIPDeletion(key netbox.IPAddressKey) error {
@@ -267,9 +361,10 @@ func (env *testEnv) WaitForIPDeletion(key netbox.IPAddressKey) error {
 
 // A testEnv provides access to a test environment control plane.
 type testEnv struct {
-	KubeClient   *kubernetes.Clientset
-	NetboxClient netbox.Client
-	stop         func() error
+	KubeClient    *kubernetes.Clientset
+	KubeCRDClient *crdclient.Clientset
+	NetboxClient  netbox.Client
+	stop          func() error
 }
 
 // Stop stops the control plane.
@@ -315,13 +410,18 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 	kubeClient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		stop()
-		return nil, fmt.Errorf("setting up kube client: %s", err)
+		return nil, fmt.Errorf("setting up kube client: %w", err)
+	}
+
+	kubeCRDClient, err := crdclient.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("setting up kube client for CRDs: %w", err)
 	}
 
 	netboxClient, err := netbox.NewClient(netboxAPIURL, netboxToken)
 	if err != nil {
 		stop()
-		return nil, fmt.Errorf("setting up netbox client: %s", err)
+		return nil, fmt.Errorf("setting up netbox client: %w", err)
 	}
 
 	if err := netboxClient.CreateUIDField(ctx); err != nil {
@@ -345,8 +445,9 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 	}()
 
 	return &testEnv{
-		KubeClient:   kubeClient,
-		NetboxClient: netboxClient,
-		stop:         stop,
+		KubeClient:    kubeClient,
+		KubeCRDClient: kubeCRDClient,
+		NetboxClient:  netboxClient,
+		stop:          stop,
 	}, nil
 }

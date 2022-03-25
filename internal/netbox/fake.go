@@ -24,8 +24,8 @@ func NewFakeClient(tags map[string]Tag, ips map[string]IPAddress) Client {
 	}
 }
 
-// GetTagByName returns a tag with the given name from fake NetBox.
-func (c *fakeClient) GetTagByName(_ context.Context, tag string) (*Tag, error) {
+// GetTag returns a tag with the given name from fake NetBox.
+func (c *fakeClient) GetTag(_ context.Context, tag string) (*Tag, error) {
 	if t, ok := c.tags[tag]; ok {
 		return &t, nil
 	}
@@ -55,6 +55,9 @@ func (c *fakeClient) GetIP(_ context.Context, key IPAddressKey) (*IPAddress, err
 
 // UpsertIP adds an IP to fake NetBox or updates it if already exists.
 func (c *fakeClient) UpsertIP(_ context.Context, ip *IPAddress) (*IPAddress, error) {
+	if c.ips == nil {
+		c.ips = make(map[string]IPAddress)
+	}
 	c.ips[ip.UID] = *ip
 	return ip, nil
 }

@@ -105,7 +105,7 @@ func TestValidationSchema(t *testing.T) {
 		},
 		valid: false,
 	}, {
-		name: "valid",
+		name: "valid with tags",
 		netboxIPSpec: NetBoxIPSpec{
 			Address: IP(net.IPv4(8, 8, 8, 8)),
 			DNSName: "valid.dns",
@@ -113,6 +113,13 @@ func TestValidationSchema(t *testing.T) {
 				Name: "good",
 				Slug: "also-good",
 			}},
+		},
+		valid: true,
+	}, {
+		name: "valid with single-domain dns",
+		netboxIPSpec: NetBoxIPSpec{
+			Address: IP(net.IPv4(8, 8, 8, 8)),
+			DNSName: "foo",
 		},
 		valid: true,
 	}}

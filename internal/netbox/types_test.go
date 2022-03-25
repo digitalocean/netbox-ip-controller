@@ -2,7 +2,6 @@ package netbox
 
 import (
 	"net"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -66,50 +65,6 @@ func TestTagFromNetBoxNestedTag(t *testing.T) {
 			convertedTag := tagFromNetBoxNestedTag(test.netboxTag)
 			if diff := cmp.Diff(test.tag, convertedTag, cmpopts.IgnoreUnexported(Tag{})); diff != "" {
 				t.Errorf("(-want, +got)\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestTagValidate(t *testing.T) {
-	tests := []struct {
-		name  string
-		tag   *Tag
-		valid bool
-	}{{
-		name:  "nil",
-		tag:   nil,
-		valid: false,
-	}, {
-		name: "name too long",
-		tag: &Tag{
-			Name: strings.Repeat("toolong", 20),
-			Slug: "good",
-		},
-		valid: false,
-	}, {
-		name: "slug has disallowed characters",
-		tag: &Tag{
-			Name: "good",
-			Slug: "bad!",
-		},
-		valid: false,
-	}, {
-		name: "valid",
-		tag: &Tag{
-			Name: "good",
-			Slug: "also-good",
-		},
-		valid: true,
-	}}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := test.tag.validate()
-			if err != nil && test.valid {
-				t.Errorf("want no validation error, got %q\n", err)
-			} else if err == nil && !test.valid {
-				t.Error("want validation error, nil")
 			}
 		})
 	}
@@ -202,83 +157,12 @@ func TestIPAddressToNetBox(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			convertedIP := test.ip.toNetBox()
+			convertedIP, err := test.ip.toNetBox()
+			if err != nil {
+				t.Error(err)
+			}
 			if diff := cmp.Diff(test.netboxIP, convertedIP, cmpopts.IgnoreUnexported(IPAddress{}, Tag{})); diff != "" {
 				t.Errorf("(-want, +got)\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestIPAddressValidate(t *testing.T) {
-	tests := []struct {
-		name  string
-		ip    *IPAddress
-		valid bool
-	}{{
-		name:  "nil",
-		ip:    nil,
-		valid: false,
-	}, {
-		name: "missing address",
-		ip: &IPAddress{
-			UID:     "c9a5c3d1-8af4-4429-82a6-fcbb73f026f3",
-			DNSName: "someapp-abc123.blah.blah",
-		},
-		valid: false,
-	}, {
-		name: "invalid uid",
-		ip: &IPAddress{
-			UID:     "not-a-uuid",
-			Address: net.IPv4(192, 168, 0, 1),
-			DNSName: "someapp-abc123.blah.blah",
-		},
-		valid: false,
-	}, {
-		name: "invalid dns name",
-		ip: &IPAddress{
-			DNSName: "_invalid._dns",
-			Address: net.IPv4(192, 168, 0, 1),
-			UID:     "c9a5c3d1-8af4-4429-82a6-fcbb73f026f3",
-		},
-		valid: false,
-	}, {
-		name: "description too long",
-		ip: &IPAddress{
-			DNSName:     "someapp-abc123.blah.blah",
-			Address:     net.IPv4(192, 168, 0, 1),
-			UID:         "c9a5c3d1-8af4-4429-82a6-fcbb73f026f3",
-			Description: strings.Repeat("toolong", 30),
-		},
-		valid: false,
-	}, {
-		name: "tag with missing name",
-		ip: &IPAddress{
-			DNSName: "someapp-abc123.blah.blah",
-			Address: net.IPv4(192, 168, 0, 1),
-			UID:     "c9a5c3d1-8af4-4429-82a6-fcbb73f026f3",
-			Tags:    []Tag{{Slug: "slug"}},
-		},
-		valid: false,
-	}, {
-		name: "valid",
-		ip: &IPAddress{
-			Address:     net.IPv4(192, 168, 0, 1),
-			UID:         "c9a5c3d1-8af4-4429-82a6-fcbb73f026f3",
-			DNSName:     "someapp-abc123.blah.blah",
-			Tags:        []Tag{{Name: "name", Slug: "slug"}},
-			Description: "app: someapp",
-		},
-		valid: true,
-	}}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := test.ip.validate()
-			if err != nil && test.valid {
-				t.Errorf("want no validation error, got %q\n", err)
-			} else if err == nil && !test.valid {
-				t.Error("want validation error, nil")
 			}
 		})
 	}

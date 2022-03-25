@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	crd "github.com/digitalocean/netbox-ip-controller/api/netbox"
+	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
+	netboxipctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/netbox-ip"
 	podctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/pod"
 	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
@@ -14,6 +16,8 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/ianschenck/envflag"
 	log "go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/runtime"
+	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -61,7 +65,16 @@ func realMain(ctx context.Context, cfg *config) error {
 		return err
 	}
 
+	scheme := runtime.NewScheme()
+	if err := kubescheme.AddToScheme(scheme); err != nil {
+		return err
+	}
+	if err := v1beta1.AddToScheme(scheme); err != nil {
+		return err
+	}
+
 	mgr, err := manager.New(cfg.kubeConfig, manager.Options{
+		Scheme:             scheme,
 		Logger:             zapr.NewLogger(log.L().Named(name)),
 		MetricsBindAddress: cfg.metricsAddr,
 	})
@@ -70,12 +83,24 @@ func realMain(ctx context.Context, cfg *config) error {
 	}
 	log.L().Info("created manager")
 
+	controllers := make(map[string]ctrl.Controller)
+
+	netboxController, err := netboxipctrl.New(netboxClient)
+	if err != nil {
+		return fmt.Errorf("initializing netbox controller: %q", err)
+	}
+	controllers["netboxip"] = netboxController
+
 	podController, err := podctrl.New(netboxClient, ctrl.WithTags(cfg.podTags), ctrl.WithLabels(cfg.podLabels))
 	if err != nil {
 		return fmt.Errorf("initializing pod controller: %s", err)
 	}
-	if err := podController.AddToManager(mgr); err != nil {
-		return fmt.Errorf("could not create controller for pod IPs: %s", err)
+	controllers["pod"] = podController
+
+	for name, controller := range controllers {
+		if err := controller.AddToManager(mgr); err != nil {
+			return fmt.Errorf("could not create %s controller: %s", name, err)
+		}
 	}
 
 	if err := mgr.Start(ctx); err != nil {
@@ -110,7 +135,7 @@ func setupConfig() (*config, error) {
 
 	envflag.Parse()
 
-	// TODO(dasha): validation for flags?
+	// TODO(dasha): validation for flags
 
 	kubeConfig, err := kubeConfig(kubeConfigFile)
 	if err != nil {

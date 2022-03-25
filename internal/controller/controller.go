@@ -36,7 +36,7 @@ func WithTags(tags []string) Option {
 
 		ctx := context.Background()
 		for _, tag := range tags {
-			existingTag, err := s.NetboxClient.GetTagByName(ctx, tag)
+			existingTag, err := s.NetboxClient.GetTag(ctx, tag)
 			if err != nil {
 				return fmt.Errorf("retrieving tag %s: %w", tag, err)
 			}

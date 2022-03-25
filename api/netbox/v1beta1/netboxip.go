@@ -69,7 +69,7 @@ type NetBoxIPList struct {
 
 var (
 	dnsLabelRegexp = "[a-zA-Z0-9][a-zA-Z0-9-]{0,62}"
-	dnsNameRegexp  = fmt.Sprintf("^(%s\\.)+%s$", dnsLabelRegexp, dnsLabelRegexp)
+	dnsNameRegexp  = fmt.Sprintf("^(%s\\.)*%s$", dnsLabelRegexp, dnsLabelRegexp)
 
 	tagSlugRegexp = "^[-a-zA-Z0-9_]+$"
 )

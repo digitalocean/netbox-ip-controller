@@ -20,13 +20,17 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-// UIDCustomFieldName is the name of the custom field in NetBox,
-// containing the UID of the resource that an IP is assigned to.
-const UIDCustomFieldName = "netbox_ip_controller__uid"
+const (
+	// UIDCustomFieldName is the name of the custom field in NetBox,
+	// containing the UID of the resource that an IP is assigned to.
+	UIDCustomFieldName = "netbox_ip_controller__uid"
+
+	uidRegexpStr = "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+)
 
 // Client is a netbox client.
 type Client interface {
-	GetTagByName(ctx context.Context, tag string) (*Tag, error)
+	GetTag(ctx context.Context, tag string) (*Tag, error)
 	CreateTag(ctx context.Context, tag string) (*Tag, error)
 	GetIP(ctx context.Context, key IPAddressKey) (*IPAddress, error)
 	UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error)
@@ -108,8 +112,8 @@ func (c *client) CreateUIDField(ctx context.Context) error {
 	return nil
 }
 
-// GetTagByName returns a tag with the given name.
-func (c *client) GetTagByName(ctx context.Context, tag string) (*Tag, error) {
+// GetTag returns a tag with the given name.
+func (c *client) GetTag(ctx context.Context, tag string) (*Tag, error) {
 	params := extras.NewExtrasTagsListParamsWithContext(ctx)
 	params.SetName(pointer.String(tag))
 
@@ -136,13 +140,6 @@ func (c *client) CreateTag(ctx context.Context, tag string) (*Tag, error) {
 	t := &Tag{
 		Name: tag,
 		Slug: tag,
-	}
-
-	// validation errors returned by go-netbox client don't give any details
-	// beyond the 400 status code; so, do our own validation to provide
-	// better error messages
-	if err := t.validate(); err != nil {
-		return nil, fmt.Errorf("validating tag: %w", err)
 	}
 
 	params := extras.NewExtrasTagsCreateParamsWithContext(ctx)
@@ -195,13 +192,6 @@ func (c *client) GetIP(ctx context.Context, key IPAddressKey) (*IPAddress, error
 // UpsertIP creates an IP address or updates one, if an IP with the same
 // UID and DNS name already exists.
 func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error) {
-	// validation errors returned by go-netbox client don't give any details
-	// beyond the 400 status code; so, do our own validation to provide
-	// better error messages
-	if err := ip.validate(); err != nil {
-		return nil, fmt.Errorf("validating IP: %w", err)
-	}
-
 	existingIP, err := c.GetIP(ctx, IPAddressKey{UID: ip.UID, DNSName: ip.DNSName})
 	if err != nil {
 		return nil, err
@@ -212,10 +202,15 @@ func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error
 		return nil, nil
 	}
 
+	netboxIP, err := ip.toNetBox()
+	if err != nil {
+		return nil, fmt.Errorf("converting: %w", err)
+	}
+
 	if existingIP != nil {
 		params := ipam.NewIpamIPAddressesUpdateParamsWithContext(ctx)
 		params.SetID(existingIP.id)
-		params.SetData(ip.toNetBox())
+		params.SetData(netboxIP)
 
 		res, err := c.Ipam.IpamIPAddressesUpdate(params, nil)
 		if err != nil {
@@ -226,7 +221,7 @@ func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error
 	}
 
 	params := ipam.NewIpamIPAddressesCreateParamsWithContext(ctx)
-	params.SetData(ip.toNetBox())
+	params.SetData(netboxIP)
 
 	res, err := c.Ipam.IpamIPAddressesCreate(params, nil)
 	if err != nil {
