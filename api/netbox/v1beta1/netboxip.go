@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -29,6 +31,15 @@ type NetBoxIPSpec struct {
 	DNSName     string `json:"dnsName"`
 	Tags        []Tag  `json:"tags,omitempty"`
 	Description string `json:"description,omitempty"`
+}
+
+// Changed returns true if the two NetBoxIP specs differ.
+// It ignores differences in slice ordering.
+func (spec NetBoxIPSpec) Changed(spec2 NetBoxIPSpec) bool {
+	// slug names are required to be unique, so can base sorting on it
+	sortTags := func(t1, t2 Tag) bool { return t1.Name < t2.Name }
+
+	return !cmp.Equal(spec, spec2, cmpopts.SortSlices(sortTags), cmpopts.EquateEmpty())
 }
 
 // Tag is a NetBox tag.

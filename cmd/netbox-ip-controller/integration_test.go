@@ -21,6 +21,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	log "go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -103,15 +104,27 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
+		var netboxip *v1beta1.NetBoxIP
+		err = retry.OnError(
+			backoff1min,
+			func(err error) bool { return kubeerrors.IsNotFound(err) },
+			func() error {
+				netboxip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
+				return err
+			})
+		if err != nil {
+			t.Errorf("waiting for netboxip: %w", err)
+		}
+
 		expectedIP := &netbox.IPAddress{
-			UID:     string(pod.UID),
+			UID:     string(netboxip.UID),
 			DNSName: pod.Name,
 			Address: net.IPv4(172, 17, 0, 1),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "pod", Slug: "pod"},
 			},
-			Description: "app: foo",
+			Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 		}
 
 		if _, err := env.WaitForIP(expectedIP); err != nil {
@@ -129,72 +142,7 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
-		ipKey := netbox.IPAddressKey{UID: string(pod.UID), DNSName: pod.Name}
-		err = env.WaitForIPDeletion(ipKey)
-		if err != nil {
-			t.Error(err)
-		}
-	}
-
-	env.WithNamespace(namespace, t, testFunc)
-}
-
-func TestPodDelete(t *testing.T) {
-	namespace := "bar"
-
-	testFunc := func() {
-		pod := &v1.Pod{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Pod",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: namespace,
-			},
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{{
-					Name:  "redis",
-					Image: "redis:6",
-				}},
-			},
-		}
-
-		var err error
-		pod, err = env.KubeClient.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatalf("creating pod: %q\n", err)
-		}
-
-		pod.Status = v1.PodStatus{
-			PodIP: "172.17.0.1",
-		}
-		_, err = env.KubeClient.CoreV1().Pods(namespace).UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
-		if err != nil {
-			t.Fatalf("updating pod status: %q\n", err)
-		}
-
-		expectedIP := &netbox.IPAddress{
-			UID:     string(pod.UID),
-			DNSName: pod.Name,
-			Address: net.IPv4(172, 17, 0, 1),
-			Tags: []netbox.Tag{
-				{Name: "kubernetes", Slug: "kubernetes"},
-				{Name: "pod", Slug: "pod"},
-			},
-		}
-		_, err = env.WaitForIP(expectedIP)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// now delete the pod and expect the IP to be removed from NetBox
-		err = env.KubeClient.CoreV1().Pods(namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
-		if err != nil {
-			t.Fatalf("deleting pod: %q\n", err)
-		}
-
-		ipKey := netbox.IPAddressKey{DNSName: pod.Name, UID: string(pod.UID)}
+		ipKey := netbox.IPAddressKey{UID: string(netboxip.UID), DNSName: pod.Name}
 		err = env.WaitForIPDeletion(ipKey)
 		if err != nil {
 			t.Error(err)
