@@ -65,7 +65,7 @@ type reconciler struct {
 // InjectClient injects the client and implements inject.Client.
 // A client will be automatically injected.
 func (r *reconciler) InjectClient(c client.Client) error {
-	log.L().Debug("setting client", log.String("reconciler", "netbox-ip"))
+	log.L().Debug("setting client", log.String("reconciler", "netboxip"))
 	r.kubeClient = c
 	return nil
 }
@@ -79,14 +79,14 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		log.String("name", req.Name),
 	)
 
-	ll.Info("reconciling NetBoxIP")
+	ll.Info("reconciling netboxip")
 
 	var ip v1beta1.NetBoxIP
 	err := r.kubeClient.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, &ip)
 	if err != nil {
 		if client.IgnoreNotFound(err) != nil {
-			ll.Error("failed to retrieve NetBoxIP", log.Error(err))
-			return reconcile.Result{}, fmt.Errorf("retrieving NetBoxIP: %w", err)
+			ll.Error("failed to retrieve netboxip", log.Error(err))
+			return reconcile.Result{}, fmt.Errorf("retrieving netboxip: %w", err)
 		}
 		return reconcile.Result{}, nil
 	}
