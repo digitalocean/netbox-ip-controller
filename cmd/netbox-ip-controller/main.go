@@ -122,7 +122,7 @@ func setupConfig() (*config, error) {
 		serviceLabelsStr string
 	)
 
-	envflag.StringVar(&cfg.metricsAddr, "METRICS_ADDR", "8001", "the port on which to serve metrics")
+	envflag.StringVar(&cfg.metricsAddr, "METRICS_ADDR", ":8001", "the port on which to serve metrics")
 	envflag.StringVar(&cfg.netboxAPIURL, "NETBOX_API_URL", "", "URL of the NetBox API server to connect to (scheme://host:port/path)")
 	envflag.StringVar(&cfg.netboxToken, "NETBOX_TOKEN", "", "NetBox API token to use for authentication")
 	envflag.StringVar(&kubeConfigFile, "KUBE_CONFIG", "", "absolute path to the kubeconfig file specifying the kube-apiserver instance; leave empty if the controller is running in-cluster")
@@ -146,8 +146,13 @@ func setupConfig() (*config, error) {
 	cfg.kubeConfig.Burst = kubeBurst
 
 	// TODO(dasha): maybe trim spaces around those tags?
-	cfg.podTags = strings.Split(podTagsStr, ",")
-	cfg.serviceTags = strings.Split(serviceTagsStr, ",")
+	if podTagsStr != "" {
+		cfg.podTags = strings.Split(podTagsStr, ",")
+	}
+
+	if serviceTagsStr != "" {
+		cfg.serviceTags = strings.Split(serviceTagsStr, ",")
+	}
 
 	cfg.podLabels = make(map[string]bool)
 	cfg.serviceLabels = make(map[string]bool)
