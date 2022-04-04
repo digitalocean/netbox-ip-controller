@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	log "go.uber.org/zap"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -203,6 +204,7 @@ func TestReconcile(t *testing.T) {
 			r := &reconciler{
 				netboxClient: netbox.NewFakeClient(nil, existingIPs),
 				kubeClient:   kubeClientBuilder.Build(),
+				log:          log.L(),
 			}
 
 			req := reconcile.Request{

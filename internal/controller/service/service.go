@@ -1,4 +1,4 @@
-package pod
+package service
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type controller struct {
 	reconciler *reconciler
 }
 
-// New returns a new Controller for pods.
+// New returns a new Controller for services.
 func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 	var s ctrl.Settings
 	for _, o := range opts {
@@ -36,9 +36,10 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 
 	return &controller{
 		reconciler: &reconciler{
-			tags:   s.Tags,
-			labels: s.Labels,
-			log:    log.L().With(log.String("reconciler", "pod")),
+			tags:          s.Tags,
+			labels:        s.Labels,
+			clusterDomain: s.ClusterDomain,
+			log:           log.L().With(log.String("reconciler", "service")),
 		},
 	}, nil
 }
@@ -47,17 +48,18 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 func (c *controller) AddToManager(mgr manager.Manager) error {
 	return builder.
 		ControllerManagedBy(mgr).
-		Named("pod").
-		For(&corev1.Pod{}).
+		Named("service").
+		For(&corev1.Service{}).
 		WithEventFilter(ctrl.OnCreateAndUpdateFilter).
 		Complete(c.reconciler)
 }
 
 type reconciler struct {
-	kubeClient client.Client
-	tags       []netbox.Tag
-	labels     map[string]bool
-	log        *log.Logger
+	kubeClient    client.Client
+	tags          []netbox.Tag
+	labels        map[string]bool
+	clusterDomain string
+	log           *log.Logger
 }
 
 // InjectClient injects the client and implements inject.Client.
@@ -69,36 +71,36 @@ func (r *reconciler) InjectClient(c client.Client) error {
 }
 
 // Reconcile is called on every event that the given reconciler is watching,
-// it updates pod IPs according to the pod changes.
+// it updates service IPs according to the service changes.
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	ll := log.L().With(
+	ll := r.log.With(
 		log.String("namespace", req.Namespace),
 		log.String("name", req.Name),
 	)
 
-	ll.Info("reconciling pod")
+	ll.Info("reconciling service")
 
-	var pod corev1.Pod
-	err := r.kubeClient.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, &pod)
+	var svc corev1.Service
+	err := r.kubeClient.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, &svc)
 	if err != nil {
 		if client.IgnoreNotFound(err) != nil {
-			ll.Error("failed to retrieve pod", log.Error(err))
-			return reconcile.Result{}, fmt.Errorf("retrieving pod: %w", err)
+			ll.Error("failed to retrieve service", log.Error(err))
+			return reconcile.Result{}, fmt.Errorf("retrieving service: %w", err)
 		}
 		return reconcile.Result{}, nil
 	}
 
-	if pod.Spec.HostNetwork {
-		// a pod on host network will have the same IP as the node
-		return reconcile.Result{}, nil
-	}
-
-	ip := r.netboxipFromPod(&pod)
-	if err := ctrl.DeclareOwner(ip, &pod); err != nil {
+	ip := r.netboxipFromService(&svc)
+	if err := ctrl.DeclareOwner(ip, &svc); err != nil {
 		return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
 	}
 
-	if pod.Status.PodIP == "" {
+	// in addition to ClusterIP type services, LoadBalancer and NodePort
+	// also have an underlying ClusterIP; we're not publishing external IPs
+	// for such services though
+	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
+		// ClusterIP may be changed to "" when service type is changed to ExternalName;
+		// "None" corresponds to a headless service
 		if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
 			return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
 		}
@@ -109,9 +111,9 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
 }
 
-func (r *reconciler) netboxipFromPod(pod *corev1.Pod) *v1beta1.NetBoxIP {
-	labels := []string{fmt.Sprintf("namespace: %s", pod.Namespace)}
-	for key, value := range pod.Labels {
+func (r *reconciler) netboxipFromService(svc *corev1.Service) *v1beta1.NetBoxIP {
+	var labels []string
+	for key, value := range svc.Labels {
 		if r.labels[key] {
 			labels = append(labels, fmt.Sprintf("%s: %s", key, value))
 		}
@@ -131,15 +133,15 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod) *v1beta1.NetBoxIP {
 			APIVersion: "v1beta1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ctrl.NetBoxIPName(pod),
-			Namespace: pod.Namespace,
+			Name:      ctrl.NetBoxIPName(svc),
+			Namespace: svc.Namespace,
 			Labels: map[string]string{
-				netboxctrl.NameLabel: pod.Name,
+				netboxctrl.NameLabel: svc.Name,
 			},
 		},
 		Spec: v1beta1.NetBoxIPSpec{
-			Address:     v1beta1.IP(net.ParseIP(pod.Status.PodIP)),
-			DNSName:     pod.Name,
+			Address:     v1beta1.IP(net.ParseIP(svc.Spec.ClusterIP)),
+			DNSName:     fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, r.clusterDomain),
 			Tags:        tags,
 			Description: strings.Join(labels, ", "),
 		},

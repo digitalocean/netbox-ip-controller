@@ -39,12 +39,9 @@ func TestWithTags(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			netboxClient := netbox.NewFakeClient(test.existingTags, nil)
 
-			s := &Settings{
-				NetboxClient: netboxClient,
-			}
-
-			o := WithTags(test.addedTags)
-			if err := o(s); err != nil {
+			var s Settings
+			o := WithTags(test.addedTags, netboxClient)
+			if err := o(&s); err != nil {
 				t.Fatal(err)
 			}
 

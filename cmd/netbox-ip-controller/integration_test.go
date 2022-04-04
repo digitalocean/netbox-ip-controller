@@ -20,7 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	log "go.uber.org/zap"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -32,6 +32,7 @@ import (
 var (
 	netboxAPIURL = "http://netbox:8080/api"
 	netboxToken  = "48c7ba92-0f82-443a-8cf3-981559ff32cf"
+	serviceCIDR  = "192.168.0.0/24"
 	env          *testEnv
 	backoff1min  = wait.Backoff{
 		Duration: 3 * time.Second,
@@ -65,11 +66,11 @@ func TestMain(m *testing.M) {
 // so, while pods, services etc. can be created, they are not
 // reconciled.
 
-func TestPodUpdate(t *testing.T) {
-	namespace := "foo"
+func TestPod(t *testing.T) {
+	namespace := "testpod"
 
 	testFunc := func() {
-		pod := &v1.Pod{
+		pod := &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
 				APIVersion: "v1",
@@ -82,8 +83,8 @@ func TestPodUpdate(t *testing.T) {
 					"irrelevant_label": "bar",
 				},
 			},
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
 					Name:  "redis",
 					Image: "redis:6",
 				}},
@@ -96,7 +97,7 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("creating pod: %q\n", err)
 		}
 
-		pod.Status = v1.PodStatus{
+		pod.Status = corev1.PodStatus{
 			PodIP: "172.17.0.1",
 		}
 		pod, err = env.KubeClient.CoreV1().Pods(namespace).UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
@@ -104,12 +105,13 @@ func TestPodUpdate(t *testing.T) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
+		netboxipName := fmt.Sprintf("pod-%s", pod.UID)
 		var netboxip *v1beta1.NetBoxIP
 		err = retry.OnError(
 			backoff1min,
 			func(err error) bool { return kubeerrors.IsNotFound(err) },
 			func() error {
-				netboxip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
+				netboxip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Get(context.Background(), netboxipName, metav1.GetOptions{})
 				return err
 			})
 		if err != nil {
@@ -122,7 +124,7 @@ func TestPodUpdate(t *testing.T) {
 			Address: net.IPv4(172, 17, 0, 1),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
-				{Name: "pod", Slug: "pod"},
+				{Name: "k8s-pod", Slug: "k8s-pod"},
 			},
 			Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 		}
@@ -136,13 +138,91 @@ func TestPodUpdate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("retrieving current pod: %q\n", err)
 		}
-		pod.Status = v1.PodStatus{}
+		pod.Status = corev1.PodStatus{}
 		_, err = env.KubeClient.CoreV1().Pods(namespace).UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
 		if err != nil {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
 		ipKey := netbox.IPAddressKey{UID: string(netboxip.UID), DNSName: pod.Name}
+		err = env.WaitForIPDeletion(ipKey)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	env.WithNamespace(namespace, t, testFunc)
+}
+
+func TestService(t *testing.T) {
+	namespace := "testservice"
+
+	testFunc := func() {
+		svc := &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app":              "foo",
+					"irrelevant_label": "bar",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:     []corev1.ServicePort{{Port: 8080}},
+				Type:      corev1.ServiceTypeClusterIP,
+				ClusterIP: "192.168.0.5",
+			},
+		}
+
+		var err error
+		svc, err = env.KubeClient.CoreV1().Services(namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("creating service: %q\n", err)
+		}
+
+		netboxipName := fmt.Sprintf("service-%s", svc.UID)
+		var netboxip *v1beta1.NetBoxIP
+		err = retry.OnError(
+			backoff1min,
+			func(err error) bool { return kubeerrors.IsNotFound(err) },
+			func() error {
+				netboxip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Get(context.Background(), netboxipName, metav1.GetOptions{})
+				return err
+			})
+		if err != nil {
+			t.Errorf("waiting for netboxip: %w", err)
+		}
+
+		expectedIP := &netbox.IPAddress{
+			UID:     string(netboxip.UID),
+			DNSName: fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace),
+			Address: net.IPv4(192, 168, 0, 5),
+			Tags: []netbox.Tag{
+				{Name: "kubernetes", Slug: "kubernetes"},
+				{Name: "k8s-service", Slug: "k8s-service"},
+			},
+			Description: "app: foo",
+		}
+
+		if _, err := env.WaitForIP(expectedIP); err != nil {
+			t.Fatal(err)
+		}
+
+		// update the service to not have ClusterIP, and make sure
+		// the IP is deleted from NetBox
+		svc.Spec.Type = corev1.ServiceTypeExternalName
+		svc.Spec.ExternalName = "foo"
+		svc.Spec.ClusterIP = ""
+		_, err = env.KubeClient.CoreV1().Services(namespace).Update(context.Background(), svc, metav1.UpdateOptions{})
+		if err != nil {
+			t.Fatalf("updating service: %q\n", err)
+		}
+
+		ipKey := netbox.IPAddressKey{UID: string(netboxip.UID), DNSName: netboxip.Spec.DNSName}
 		err = env.WaitForIPDeletion(ipKey)
 		if err != nil {
 			t.Error(err)
@@ -203,13 +283,13 @@ func TestNetBoxIP(t *testing.T) {
 			t.Fatalf("retrieving netboxip for update: %q\n", err)
 		}
 
-		ip.Spec.Tags = append(ip.Spec.Tags, v1beta1.Tag{Name: "pod", Slug: "pod"})
+		ip.Spec.Tags = append(ip.Spec.Tags, v1beta1.Tag{Name: "k8s-pod", Slug: "k8s-pod"})
 		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Update(context.Background(), ip, metav1.UpdateOptions{})
 		if err != nil {
 			t.Fatalf("updating netboxip: %q\n", err)
 		}
 
-		expectedIPInNetBox.Tags = append(expectedIPInNetBox.Tags, netbox.Tag{Name: "pod", Slug: "pod"})
+		expectedIPInNetBox.Tags = append(expectedIPInNetBox.Tags, netbox.Tag{Name: "k8s-pod", Slug: "k8s-pod"})
 
 		if _, err = env.WaitForIP(expectedIPInNetBox); err != nil {
 			t.Fatal(err)
@@ -235,7 +315,7 @@ func TestNetBoxIP(t *testing.T) {
 }
 
 func (env *testEnv) WithNamespace(namespace string, t *testing.T, f func()) {
-	_, err := env.KubeClient.CoreV1().Namespaces().Create(context.Background(), &v1.Namespace{
+	_, err := env.KubeClient.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Namespace",
 			APIVersion: "v1",
@@ -341,7 +421,7 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 	}
 
 	apiserver := env.ControlPlane.GetAPIServer()
-	apiserver.Configure()
+	apiserver.Configure().Set("service-cluster-ip-range", serviceCIDR)
 
 	restConfig, err := env.Start()
 	if err != nil {
@@ -378,11 +458,14 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	cfg := &config{
-		netboxAPIURL: netboxAPIURL,
-		netboxToken:  netboxToken,
-		kubeConfig:   restConfig,
-		podTags:      []string{"kubernetes", "pod"},
-		podLabels:    map[string]bool{"app": true},
+		netboxAPIURL:  netboxAPIURL,
+		netboxToken:   netboxToken,
+		kubeConfig:    restConfig,
+		podTags:       []string{"kubernetes", "k8s-pod"},
+		podLabels:     map[string]bool{"app": true},
+		serviceTags:   []string{"kubernetes", "k8s-service"},
+		serviceLabels: map[string]bool{"app": true},
+		clusterDomain: "cluster.local",
 	}
 	go func() {
 		if err := realMain(ctx, cfg); err != nil && err != context.Canceled {

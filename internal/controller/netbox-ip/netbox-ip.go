@@ -14,9 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -25,26 +23,20 @@ type controller struct {
 }
 
 // New returns a new Controller for NetBoxIP resource.
-func New(netboxClient netbox.Client) (ctrl.Controller, error) {
+func New(opts ...ctrl.Option) (ctrl.Controller, error) {
+	var s ctrl.Settings
+	for _, o := range opts {
+		if err := o(&s); err != nil {
+			return nil, err
+		}
+	}
+
 	return &controller{
 		reconciler: &reconciler{
-			netboxClient: netboxClient,
+			netboxClient: s.NetBoxClient,
+			log:          log.L().With(log.String("reconciler", "netboxip")),
 		},
 	}, nil
-}
-
-var filter = predicate.Funcs{
-	CreateFunc: func(e event.CreateEvent) bool {
-		return e.Object != nil
-	},
-	UpdateFunc: func(e event.UpdateEvent) bool {
-		return e.ObjectNew != nil
-	},
-	DeleteFunc: func(_ event.DeleteEvent) bool {
-		// we delete the IP when the pod gets a deletionTimestamp,
-		// which falls under UpdateFunc
-		return false
-	},
 }
 
 // AddToManager attaches the controller to the given manager.
@@ -53,19 +45,20 @@ func (c *controller) AddToManager(mgr manager.Manager) error {
 		ControllerManagedBy(mgr).
 		Named("netboxip").
 		For(&v1beta1.NetBoxIP{}).
-		WithEventFilter(filter).
+		WithEventFilter(ctrl.OnCreateAndUpdateFilter).
 		Complete(c.reconciler)
 }
 
 type reconciler struct {
 	netboxClient netbox.Client
 	kubeClient   client.Client
+	log          *log.Logger
 }
 
 // InjectClient injects the client and implements inject.Client.
 // A client will be automatically injected.
 func (r *reconciler) InjectClient(c client.Client) error {
-	log.L().Debug("setting client", log.String("reconciler", "netboxip"))
+	r.log.Debug("setting client")
 	r.kubeClient = c
 	return nil
 }
@@ -74,7 +67,6 @@ func (r *reconciler) InjectClient(c client.Client) error {
 // it updates pod IPs according to the pod changes.
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	ll := log.L().With(
-		log.String("reconciler", "netboxip"),
 		log.String("namespace", req.Namespace),
 		log.String("name", req.Name),
 	)

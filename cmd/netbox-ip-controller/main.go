@@ -10,6 +10,7 @@ import (
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	netboxipctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/netbox-ip"
 	podctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/pod"
+	svcctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/service"
 	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
@@ -35,6 +36,7 @@ type config struct {
 	serviceTags   []string
 	podLabels     map[string]bool
 	serviceLabels map[string]bool
+	clusterDomain string
 }
 
 func main() {
@@ -85,17 +87,30 @@ func realMain(ctx context.Context, cfg *config) error {
 
 	controllers := make(map[string]ctrl.Controller)
 
-	netboxController, err := netboxipctrl.New(netboxClient)
+	netboxController, err := netboxipctrl.New(ctrl.WithNetBoxClient(netboxClient))
 	if err != nil {
 		return fmt.Errorf("initializing netbox controller: %q", err)
 	}
 	controllers["netboxip"] = netboxController
 
-	podController, err := podctrl.New(netboxClient, ctrl.WithTags(cfg.podTags), ctrl.WithLabels(cfg.podLabels))
+	podController, err := podctrl.New(
+		ctrl.WithTags(cfg.podTags, netboxClient),
+		ctrl.WithLabels(cfg.podLabels),
+	)
 	if err != nil {
 		return fmt.Errorf("initializing pod controller: %s", err)
 	}
 	controllers["pod"] = podController
+
+	svcController, err := svcctrl.New(
+		ctrl.WithTags(cfg.serviceTags, netboxClient),
+		ctrl.WithLabels(cfg.serviceLabels),
+		ctrl.WithClusterDomain(cfg.clusterDomain),
+	)
+	if err != nil {
+		return fmt.Errorf("initializing service controller: %s", err)
+	}
+	controllers["service"] = svcController
 
 	for name, controller := range controllers {
 		if err := controller.AddToManager(mgr); err != nil {
@@ -128,10 +143,11 @@ func setupConfig() (*config, error) {
 	envflag.StringVar(&kubeConfigFile, "KUBE_CONFIG", "", "absolute path to the kubeconfig file specifying the kube-apiserver instance; leave empty if the controller is running in-cluster")
 	envflag.Float64Var(&kubeQPS, "KUBE_QPS", 20.0, "maximum number of requests per second to the kube-apiserver")
 	envflag.IntVar(&kubeBurst, "KUBE_BURST", 30, "maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins")
-	envflag.StringVar(&podTagsStr, "POD_IP_TAGS", "kubernetes,pod", "comma-separated list of tags to add to pod IPs in NetBox")
-	envflag.StringVar(&serviceTagsStr, "SERVICE_IP_TAGS", "kubernetes,service", "comma-separated list of tags to add to service IPs in NetBox")
+	envflag.StringVar(&podTagsStr, "POD_IP_TAGS", "kubernetes,k8s-pod", "comma-separated list of tags to add to pod IPs in NetBox")
+	envflag.StringVar(&serviceTagsStr, "SERVICE_IP_TAGS", "kubernetes,k8s-service", "comma-separated list of tags to add to service IPs in NetBox")
 	envflag.StringVar(&podLabelsStr, "POD_PUBLISH_LABELS", "app", "comma-separated list of pod labels that should be added to the IP description in NetBox")
 	envflag.StringVar(&serviceLabelsStr, "SERVICE_PUBLISH_LABELS", "app", "comma-separated list of service labels that should be added to the IP description in NetBox")
+	envflag.StringVar(&cfg.clusterDomain, "CLUSTER_DOMAIN", "cluster.local", "domain name of the cluster")
 
 	envflag.Parse()
 
