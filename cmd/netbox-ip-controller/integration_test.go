@@ -119,9 +119,9 @@ func TestPod(t *testing.T) {
 		}
 
 		expectedIP := &netbox.IPAddress{
-			UID:     string(netboxip.UID),
+			UID:     netbox.UID(netboxip.UID),
 			DNSName: pod.Name,
-			Address: net.IPv4(172, 17, 0, 1),
+			Address: netbox.IP(net.IPv4(172, 17, 0, 1)),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "k8s-pod", Slug: "k8s-pod"},
@@ -144,8 +144,7 @@ func TestPod(t *testing.T) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
-		ipKey := netbox.IPAddressKey{UID: string(netboxip.UID), DNSName: pod.Name}
-		err = env.WaitForIPDeletion(ipKey)
+		err = env.WaitForIPDeletion(netbox.UID(netboxip.UID))
 		if err != nil {
 			t.Error(err)
 		}
@@ -198,9 +197,9 @@ func TestService(t *testing.T) {
 		}
 
 		expectedIP := &netbox.IPAddress{
-			UID:     string(netboxip.UID),
+			UID:     netbox.UID(netboxip.UID),
 			DNSName: fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace),
-			Address: net.IPv4(192, 168, 0, 5),
+			Address: netbox.IP(net.IPv4(192, 168, 0, 5)),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "k8s-service", Slug: "k8s-service"},
@@ -222,8 +221,7 @@ func TestService(t *testing.T) {
 			t.Fatalf("updating service: %q\n", err)
 		}
 
-		ipKey := netbox.IPAddressKey{UID: string(netboxip.UID), DNSName: netboxip.Spec.DNSName}
-		err = env.WaitForIPDeletion(ipKey)
+		err = env.WaitForIPDeletion(netbox.UID(netboxip.UID))
 		if err != nil {
 			t.Error(err)
 		}
@@ -264,9 +262,9 @@ func TestNetBoxIP(t *testing.T) {
 		}
 
 		expectedIPInNetBox := &netbox.IPAddress{
-			UID:     string(ip.UID),
+			UID:     netbox.UID(ip.UID),
 			DNSName: "foo",
-			Address: net.IPv4(192, 168, 0, 1),
+			Address: netbox.IP(net.IPv4(192, 168, 0, 1)),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 			},
@@ -301,11 +299,7 @@ func TestNetBoxIP(t *testing.T) {
 			t.Fatalf("deleting netboxip: %q\n", err)
 		}
 
-		ipKey := netbox.IPAddressKey{
-			DNSName: ip.Spec.DNSName,
-			UID:     string(ip.UID),
-		}
-		err = env.WaitForIPDeletion(ipKey)
+		err = env.WaitForIPDeletion(netbox.UID(ip.UID))
 		if err != nil {
 			t.Error(err)
 		}
@@ -342,14 +336,12 @@ func (env *testEnv) WithNamespace(namespace string, t *testing.T, f func()) {
 }
 
 func (env *testEnv) WaitForIP(ip *netbox.IPAddress) (*netbox.IPAddress, error) {
-	key := netbox.IPAddressKey{UID: ip.UID, DNSName: ip.DNSName}
-
 	var foundIP *netbox.IPAddress
 	notFoundErr := errors.New("IP not found")
 	retryNotFound := func(err error) bool { return errors.Is(err, notFoundErr) }
 	err := retry.OnError(backoff1min, retryNotFound, func() error {
 		var err error
-		foundIP, err = env.NetboxClient.GetIP(context.Background(), key)
+		foundIP, err = env.NetboxClient.GetIP(context.Background(), ip.UID)
 		if err != nil {
 			return err
 		} else if foundIP == nil {
@@ -360,7 +352,8 @@ func (env *testEnv) WaitForIP(ip *netbox.IPAddress) (*netbox.IPAddress, error) {
 			ip,
 			foundIP,
 			cmpopts.SortSlices(func(t1, t2 netbox.Tag) bool { return t1.Name < t2.Name }),
-			cmpopts.IgnoreUnexported(netbox.IPAddress{}, netbox.Tag{}),
+			cmpopts.IgnoreFields(netbox.IPAddress{}, "ID"),
+			cmpopts.IgnoreFields(netbox.Tag{}, "ID"),
 		)
 		if diff != "" {
 			return fmt.Errorf("%w:\n (-want, +got)\n%s", notFoundErr, diff)
@@ -371,13 +364,13 @@ func (env *testEnv) WaitForIP(ip *netbox.IPAddress) (*netbox.IPAddress, error) {
 	return foundIP, err
 }
 
-func (env *testEnv) WaitForIPDeletion(key netbox.IPAddressKey) error {
+func (env *testEnv) WaitForIPDeletion(uid netbox.UID) error {
 	var ip *netbox.IPAddress
 	foundErr := errors.New("IP still exists")
 	retryFound := func(err error) bool { return err == foundErr }
 	return retry.OnError(backoff1min, retryFound, func() error {
 		var err error
-		ip, err = env.NetboxClient.GetIP(context.Background(), key)
+		ip, err = env.NetboxClient.GetIP(context.Background(), uid)
 		if err != nil {
 			return err
 		} else if ip != nil {
@@ -443,6 +436,7 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 
 	kubeCRDClient, err := crdclient.NewForConfig(restConfig)
 	if err != nil {
+		stop()
 		return nil, fmt.Errorf("setting up kube client for CRDs: %w", err)
 	}
 
@@ -453,6 +447,7 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 	}
 
 	if err := netboxClient.CreateUIDField(ctx); err != nil {
+		stop()
 		return nil, fmt.Errorf("creating UID field: %w", err)
 	}
 

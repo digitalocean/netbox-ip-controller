@@ -1,159 +1,129 @@
 package netbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/netbox-community/go-netbox/netbox/models"
-	"k8s.io/utils/pointer"
 )
+
+// CustomField is a NetBox custom field attached to some model(s).
+type CustomField struct {
+	ID              int64  `json:"id,omitempty"`
+	Name            string `json:"name,omitempty"`
+	Label           string `json:"label,omitempty"`
+	Description     string `json:"description,omitempty"`
+	Required        bool   `json:"required,omitempty"`
+	ValidationRegex string `json:"validation_regex,omitempty"`
+	// Type is the type of the field.
+	// Possible values: text, longtext, integer, boolean, date, url, json, select, multiselect
+	Type string `json:"type"`
+	// ContentTypes is the list of modelt to which the custom field is added.
+	// Should be in format "domain.object", e.g. "ipam.ipaddress".
+	ContentTypes []string `json:"content_types"`
+	// FilterLogic can be one of: disabled, loose, exact. Specified how the field
+	// will be matched when persorming a query.
+	FilterLogic string `json:"filter_logic,omitempty"`
+	// Weight is for display purposes: fields with higher weights appear lower in a form.
+	Weight int64 `json:"weight,omitempty"`
+}
 
 // Tag represents a NetBox tag.
 type Tag struct {
-	id   int64
-	Name string
-	Slug string
+	ID   int64  `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	Slug string `json:"slug,omitempty"`
 }
 
-func tagFromNetBox(netboxTag *models.Tag) *Tag {
-	if netboxTag == nil {
-		return nil
-	}
-
-	tag := &Tag{id: netboxTag.ID}
-	if netboxTag.Name != nil {
-		tag.Name = *netboxTag.Name
-	}
-	if netboxTag.Slug != nil {
-		tag.Slug = *netboxTag.Slug
-	}
-
-	return tag
-}
-
-func tagFromNetBoxNestedTag(nt *models.NestedTag) *Tag {
-	if nt == nil {
-		return nil
-	}
-
-	return tagFromNetBox(&models.Tag{
-		ID:   nt.ID,
-		Name: nt.Name,
-		Slug: nt.Slug,
-	})
-}
-
-func (tag *Tag) toNetBox() *models.Tag {
-	if tag == nil {
-		return nil
-	}
-
-	return &models.Tag{
-		ID:   tag.id,
-		Name: pointer.String(tag.Name),
-		Slug: pointer.String(tag.Slug),
-	}
+// TagList represents the response from the NetBox endpoints that return multiple tags.
+type TagList struct {
+	Count   uint  `json:"count"`
+	Results []Tag `json:"results"`
 }
 
 // IPAddress represents a NetBox IP address.
 type IPAddress struct {
-	id int64
+	ID int64 `json:"id,omitempty"`
 	// UID is the UID of the object that this IP is assigned to.
-	UID     string
-	DNSName string
+	// It is stored in NetBox as a custom field.
+	UID     UID    `json:"custom_fields,omitempty"`
+	DNSName string `json:"dns_name,omitempty"`
 	// TODO(dasha): in go 1.18, there's a new net/netip package with
 	// a better (immutable and comparable) netip.Addr
-	Address     net.IP
-	Tags        []Tag
-	Description string
+	Address     IP     `json:"address,omitempty"`
+	Tags        []Tag  `json:"tags,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
-// IPAddressKey is used to uniquely identify an IP address.
-type IPAddressKey struct {
-	UID     string
-	DNSName string
+// IPAddressList represents the response from the NetBox endpoints that return multiple IP addresses.
+type IPAddressList struct {
+	Count   uint        `json:"count"`
+	Results []IPAddress `json:"results"`
 }
 
-func ipAddressFromNetBox(netboxIP *models.IPAddress) *IPAddress {
-	if netboxIP == nil {
-		return nil
+// UID is the type for representing UID of an IPAddress.
+// Its purpose is to provide custom marshaling and unmarshaling.
+type UID string
+
+// UnmarshalJSON implements the json.Unmarshaler interface for UID.
+func (uid *UID) UnmarshalJSON(b []byte) error {
+	var customFields map[string]interface{}
+	if err := json.Unmarshal(b, &customFields); err != nil {
+		return fmt.Errorf("unmarshaling UID from custom fields: %w", err)
 	}
 
-	ip := &IPAddress{
-		id:          netboxIP.ID,
-		DNSName:     netboxIP.DNSName,
-		Description: netboxIP.Description,
+	if u, ok := customFields[UIDCustomFieldName].(string); ok {
+		*uid = UID(u)
 	}
-
-	if netboxIP.Address != nil {
-		addr, _, err := net.ParseCIDR(*netboxIP.Address)
-		if err == nil {
-			ip.Address = addr
-		}
-	}
-
-	if customFields, ok := netboxIP.CustomFields.(map[string]interface{}); ok {
-		if uid, ok := customFields[UIDCustomFieldName].(string); ok {
-			ip.UID = uid
-		}
-	}
-
-	for _, netboxTag := range netboxIP.Tags {
-		tag := tagFromNetBoxNestedTag(netboxTag)
-		if tag != nil {
-			ip.Tags = append(ip.Tags, *tag)
-		}
-	}
-
-	return ip
+	// if there's no UID present, that's not an error
+	return nil
 }
 
-func (ip *IPAddress) toNetBox() (*models.WritableIPAddress, error) {
-	if ip == nil {
-		return nil, nil
+// MarshalJSON implements the json.Marshaler interface for UID.
+func (uid UID) MarshalJSON() ([]byte, error) {
+	customFields := make(map[string]string)
+	customFields[UIDCustomFieldName] = string(uid)
+	return json.Marshal(customFields)
+}
+
+// IP is the type for representing address from NetBox.
+// Its purpose is to provide custom marshaling and unmarshaling.
+type IP net.IP
+
+// UnmarshalJSON implements the json.Unmarshaler interface for IP.
+func (ip *IP) UnmarshalJSON(b []byte) error {
+	var addrStr string
+	if err := json.Unmarshal(b, &addrStr); err != nil {
+		return fmt.Errorf("unmarshaling address to string: %w", err)
+	}
+	addr, _, err := net.ParseCIDR(addrStr)
+	if err != nil {
+		return fmt.Errorf("parsing address: %w", err)
+	}
+	*ip = IP(addr)
+	return nil
+}
+
+// MarshalText implements the encoding.TextMarshaler interface for IP.
+func (ip IP) MarshalText() ([]byte, error) {
+	var cidrSuffix string
+
+	// net.IP.To4() returns nil if the address is not an IPv4 address,
+	// and net.IP.To16() - if not a valid IPv6
+	isValidIPv4 := (net.IP(ip).To4() != nil)
+	isValidIPv6 := (net.IP(ip).To16() != nil)
+
+	if isValidIPv4 && isValidIPv6 {
+		cidrSuffix = "32"
+	} else if isValidIPv6 && !isValidIPv4 {
+		cidrSuffix = "128"
+	} else {
+		return nil, fmt.Errorf("%q is not a valid IPv4 or IPv6 address", ip)
 	}
 
-	netboxIP := &models.WritableIPAddress{
-		Description: ip.Description,
-		DNSName:     ip.DNSName,
-		// nil tags are not allowed by NetBox's validation
-		Tags: []*models.NestedTag{},
-		Role: "vip",
-	}
-
-	if ip.Address != nil {
-		var cidrSuffix string
-
-		// net.IP.To4() returns nil if the address is not an IPv4 address,
-		// and net.IP.To16() - if not a valid IPv6
-		isValidIPv4 := (ip.Address.To4() != nil)
-		isValidIPv6 := (ip.Address.To16() != nil)
-
-		if isValidIPv4 && isValidIPv6 {
-			cidrSuffix = "32"
-		} else if !isValidIPv4 {
-			cidrSuffix = "128"
-		} else {
-			return nil, fmt.Errorf("%q is not a valid IPv4 or IPv6 address", ip.Address)
-		}
-
-		netboxIP.Address = pointer.String(fmt.Sprintf("%s/%s", ip.Address.String(), cidrSuffix))
-	}
-
-	if ip.UID != "" {
-		netboxIP.CustomFields = map[string]string{UIDCustomFieldName: ip.UID}
-	}
-
-	for _, tag := range ip.Tags {
-		netboxIP.Tags = append(netboxIP.Tags, &models.NestedTag{
-			Name: pointer.String(tag.Name),
-			Slug: pointer.String(tag.Slug),
-		})
-	}
-
-	return netboxIP, nil
+	return []byte(fmt.Sprintf("%s/%s", net.IP(ip).String(), cidrSuffix)), nil
 }
 
 func (ip *IPAddress) changed(ip2 *IPAddress) bool {

@@ -84,7 +84,6 @@ func WithNetBoxClient(client netbox.Client) Option {
 
 // WithClusterDomain sets the k8s cluster domain name.
 func WithClusterDomain(domain string) Option {
-	fmt.Println("SETTING CLUSTER DOMAIN", domain)
 	return func(s *Settings) error {
 		s.ClusterDomain = domain
 		return nil

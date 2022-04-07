@@ -65,8 +65,8 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		expectedIPInNetBox: &netbox.IPAddress{
-			UID:     uid,
-			Address: net.IPv4(192, 168, 0, 1),
+			UID:     netbox.UID(uid),
+			Address: netbox.IP(net.IPv4(192, 168, 0, 1)),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "bar",
@@ -96,8 +96,8 @@ func TestReconcile(t *testing.T) {
 	}, {
 		name: "existing netboxip updated",
 		existingIPInNetBox: &netbox.IPAddress{
-			UID:     uid,
-			Address: net.IPv4(172, 16, 0, 1),
+			UID:     netbox.UID(uid),
+			Address: netbox.IP(net.IPv4(172, 16, 0, 1)),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "fuz",
@@ -125,8 +125,8 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		expectedIPInNetBox: &netbox.IPAddress{
-			UID:     uid,
-			Address: net.IPv4(192, 168, 0, 1),
+			UID:     netbox.UID(uid),
+			Address: netbox.IP(net.IPv4(192, 168, 0, 1)),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "bar",
@@ -156,8 +156,8 @@ func TestReconcile(t *testing.T) {
 	}, {
 		name: "netboxip deleted",
 		existingIPInNetBox: &netbox.IPAddress{
-			UID:     uid,
-			Address: net.IPv4(172, 16, 0, 1),
+			UID:     netbox.UID(uid),
+			Address: netbox.IP(net.IPv4(172, 16, 0, 1)),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "fuz",
@@ -191,9 +191,9 @@ func TestReconcile(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			existingIPs := make(map[string]netbox.IPAddress)
+			existingIPs := make(map[netbox.UID]netbox.IPAddress)
 			if test.existingIPInNetBox != nil {
-				existingIPs[uid] = *test.existingIPInNetBox
+				existingIPs[netbox.UID(uid)] = *test.existingIPInNetBox
 			}
 
 			kubeClientBuilder := fakeclient.NewClientBuilder().WithScheme(scheme)
@@ -218,10 +218,7 @@ func TestReconcile(t *testing.T) {
 				t.Errorf("reconciling: %q\n", err)
 			}
 
-			actualIPInNetBox, err := r.netboxClient.GetIP(context.Background(), netbox.IPAddressKey{
-				UID:     uid,
-				DNSName: name,
-			})
+			actualIPInNetBox, err := r.netboxClient.GetIP(context.Background(), netbox.UID(uid))
 			if err != nil {
 				t.Errorf("fetching IP from NetBox: %q\n", err)
 			}

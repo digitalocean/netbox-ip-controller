@@ -3,7 +3,6 @@ package netboxip
 import (
 	"context"
 	"fmt"
-	"net"
 
 	netboxctrl "github.com/digitalocean/netbox-ip-controller"
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
@@ -88,15 +87,10 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		log.Any("ip", ip.Spec.Address),
 	)
 
-	ipKey := netbox.IPAddressKey{
-		DNSName: ip.Spec.DNSName,
-		UID:     string(ip.UID),
-	}
-
 	if !ip.DeletionTimestamp.IsZero() {
 		// if deletion timestamp is set, that means the object is under deletion
 		// and waiting for finalizers to be executed
-		if err := r.netboxClient.DeleteIP(ctx, ipKey); err != nil {
+		if err := r.netboxClient.DeleteIP(ctx, netbox.UID(ip.UID)); err != nil {
 			return reconcile.Result{}, fmt.Errorf("deleting IP: %w", err)
 		}
 		ll.Info("deleted IP: netboxip was removed")
@@ -127,9 +121,9 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	_, err = r.netboxClient.UpsertIP(ctx, &netbox.IPAddress{
-		UID:         string(ip.UID),
+		UID:         netbox.UID(ip.UID),
 		DNSName:     ip.Spec.DNSName,
-		Address:     net.IP(ip.Spec.Address),
+		Address:     netbox.IP(ip.Spec.Address),
 		Tags:        tags,
 		Description: ip.Spec.Description,
 	})

@@ -7,16 +7,16 @@ import (
 
 type fakeClient struct {
 	tags map[string]Tag
-	ips  map[string]IPAddress
+	ips  map[UID]IPAddress
 }
 
 // NewFakeClient returns a fake NetBox client.
-func NewFakeClient(tags map[string]Tag, ips map[string]IPAddress) Client {
+func NewFakeClient(tags map[string]Tag, ips map[UID]IPAddress) Client {
 	if tags == nil {
 		tags = make(map[string]Tag)
 	}
 	if ips == nil {
-		ips = make(map[string]IPAddress)
+		ips = make(map[UID]IPAddress)
 	}
 	return &fakeClient{
 		tags: tags,
@@ -45,9 +45,9 @@ func (c *fakeClient) CreateTag(_ context.Context, tag string) (*Tag, error) {
 	return &t, nil
 }
 
-// GetIP returns an IP with the given UID and DNS name from fake NetBox.
-func (c *fakeClient) GetIP(_ context.Context, key IPAddressKey) (*IPAddress, error) {
-	if ip, ok := c.ips[key.UID]; ok && ip.DNSName == key.DNSName {
+// GetIP returns an IP with the given UID from fake NetBox.
+func (c *fakeClient) GetIP(_ context.Context, uid UID) (*IPAddress, error) {
+	if ip, ok := c.ips[uid]; ok {
 		return &ip, nil
 	}
 	return nil, nil
@@ -56,17 +56,15 @@ func (c *fakeClient) GetIP(_ context.Context, key IPAddressKey) (*IPAddress, err
 // UpsertIP adds an IP to fake NetBox or updates it if already exists.
 func (c *fakeClient) UpsertIP(_ context.Context, ip *IPAddress) (*IPAddress, error) {
 	if c.ips == nil {
-		c.ips = make(map[string]IPAddress)
+		c.ips = make(map[UID]IPAddress)
 	}
 	c.ips[ip.UID] = *ip
 	return ip, nil
 }
 
-// DeleteIP deletes an IP with the given UID and DNS name from fake NetBox.
-func (c *fakeClient) DeleteIP(_ context.Context, key IPAddressKey) error {
-	if ip, ok := c.ips[key.UID]; ok && ip.DNSName == key.DNSName {
-		delete(c.ips, key.UID)
-	}
+// DeleteIP deletes an IP with the given UID from fake NetBox.
+func (c *fakeClient) DeleteIP(_ context.Context, uid UID) error {
+	delete(c.ips, uid)
 	return nil
 }
 

@@ -5,40 +5,45 @@ package netbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
-	httptransport "github.com/go-openapi/runtime/client"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
-	netbox "github.com/netbox-community/go-netbox/netbox/client"
-	"github.com/netbox-community/go-netbox/netbox/client/extras"
-	"github.com/netbox-community/go-netbox/netbox/client/ipam"
-	"github.com/netbox-community/go-netbox/netbox/models"
 	log "go.uber.org/zap"
-	"k8s.io/utils/pointer"
 )
 
 const (
 	// UIDCustomFieldName is the name of the custom field in NetBox,
 	// containing the UID of the resource that an IP is assigned to.
-	UIDCustomFieldName = "netbox_ip_controller__uid"
+	UIDCustomFieldName = "netbox_ip_controller_uid"
+	uidRegexpStr       = "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
 
-	uidRegexpStr = "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+	// max size of response body that we ever expect to get, in bytes:
+	// a safeguard in case we get a never-ending or extremely long response
+	responseBodySizeLimit = 1 << 20
 )
 
 // Client is a netbox client.
 type Client interface {
 	GetTag(ctx context.Context, tag string) (*Tag, error)
 	CreateTag(ctx context.Context, tag string) (*Tag, error)
-	GetIP(ctx context.Context, key IPAddressKey) (*IPAddress, error)
+	GetIP(ctx context.Context, uid UID) (*IPAddress, error)
 	UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error)
-	DeleteIP(ctx context.Context, key IPAddressKey) error
+	DeleteIP(ctx context.Context, uid UID) error
 	CreateUIDField(ctx context.Context) error
 }
 
-type client netbox.NetBoxAPI
+type client struct {
+	httpClient *retryablehttp.Client
+	baseURL    string
+	token      string
+}
 
 // NewClient sets up a new NetBox client with default authorization
 // and retries.
@@ -48,17 +53,11 @@ func NewClient(apiURL, apiToken string) (Client, error) {
 		return nil, err
 	}
 
-	transport := httptransport.NewWithClient(
-		u.Host,
-		u.Path,
-		[]string{u.Scheme},
-		retryableHTTPClient(5),
-	)
-	transport.DefaultAuthentication = httptransport.APIKeyAuth("Authorization", "header", "Token "+apiToken)
-
-	c := client(*netbox.New(transport, nil))
-
-	return &c, nil
+	return &client{
+		httpClient: retryableHTTPClient(5),
+		baseURL:    strings.TrimSuffix(u.String(), "/"),
+		token:      apiToken,
+	}, nil
 }
 
 func parseAndValidateURL(apiURL string) (*url.URL, error) {
@@ -71,7 +70,7 @@ func parseAndValidateURL(apiURL string) (*url.URL, error) {
 	return u, nil
 }
 
-func retryableHTTPClient(retryMax int) *http.Client {
+func retryableHTTPClient(retryMax int) *retryablehttp.Client {
 	// add retries on 50X errors
 	retryClient := retryablehttp.NewClient()
 	retryClient.RetryMax = retryMax
@@ -86,115 +85,116 @@ func retryableHTTPClient(retryMax int) *http.Client {
 		return retryablehttp.DefaultRetryPolicy(ctx, res, err)
 	}
 
-	return retryClient.StandardClient()
+	return retryClient
 }
+
+// NOTE: trailing "/" is required for endpoints that work with a single object ID
+// (e.g. PUT /someobj/1/, DELETE /someobj/1/): without it, NetBox will always return
+// 200 without actually making any changes ¯\_(ツ)_/¯
 
 // CreateUIDField adds a custom field with name UIDCustomFieldName
 // to NetBox IPAddresses.
 func (c *client) CreateUIDField(ctx context.Context) error {
-	params := extras.NewExtrasCustomFieldsCreateParamsWithContext(ctx)
-	params.SetData(&models.WritableCustomField{
+	url := fmt.Sprintf("%s/extras/custom-fields/", c.baseURL)
+
+	field := CustomField{
 		ContentTypes:    []string{"ipam.ipaddress"},
 		Description:     "UID of the object the IP is assigned to.",
 		FilterLogic:     "exact",
 		Label:           "UID",
-		Name:            pointer.String(UIDCustomFieldName),
+		Name:            UIDCustomFieldName,
 		Required:        false,
 		Type:            "text",
 		ValidationRegex: uidRegexpStr,
-		Weight:          pointer.Int64(100),
-	})
-
-	if _, err := c.Extras.ExtrasCustomFieldsCreate(params, nil); err != nil {
-		return fmt.Errorf("cannot create custom UID field: %w", err)
+		Weight:          100,
 	}
 
+	if _, err := c.executeRequest(ctx, url, http.MethodPost, field); err != nil {
+		return fmt.Errorf("executing request: %w", err)
+	}
 	return nil
 }
 
 // GetTag returns a tag with the given name.
 func (c *client) GetTag(ctx context.Context, tag string) (*Tag, error) {
-	params := extras.NewExtrasTagsListParamsWithContext(ctx)
-	params.SetName(pointer.String(tag))
+	url := fmt.Sprintf("%s/extras/tags/?name=%s", c.baseURL, tag)
 
-	res, err := c.Extras.ExtrasTagsList(params, nil)
+	data, err := c.executeRequest(ctx, url, http.MethodGet, nil)
 	if err != nil {
-		return nil, fmt.Errorf("listing tags: %w", err)
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
-	tags := res.GetPayload().Results
-	if len(tags) > 1 {
+	var tagList TagList
+	if err := json.Unmarshal(data, &tagList); err != nil {
+		return nil, fmt.Errorf("unmarshaling response: %w", err)
+	}
+
+	if len(tagList.Results) > 1 {
 		// netbox tag names must be unique, so this should never happen
 		return nil, fmt.Errorf("more than one tag with name %q found", tag)
 	}
-	if len(tags) == 0 {
+	if len(tagList.Results) == 0 {
 		return nil, nil
 	}
 
-	return tagFromNetBox(tags[0]), nil
+	return &tagList.Results[0], nil
 }
 
 // CreateTag creates a tag with the given name. Tag slug is set to the
 // same value as tag name.
 func (c *client) CreateTag(ctx context.Context, tag string) (*Tag, error) {
+	url := fmt.Sprintf("%s/extras/tags/", c.baseURL)
+
 	t := &Tag{
 		Name: tag,
 		Slug: tag,
 	}
-
-	params := extras.NewExtrasTagsCreateParamsWithContext(ctx)
-	params.SetData(t.toNetBox())
-
-	res, err := c.Extras.ExtrasTagsCreate(params, nil)
+	data, err := c.executeRequest(ctx, url, http.MethodPost, t)
 	if err != nil {
-		return nil, fmt.Errorf("creting tag: %w", err)
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
-	return tagFromNetBox(res.GetPayload()), nil
+	var createdTag Tag
+	if err := json.Unmarshal(data, &createdTag); err != nil {
+		return nil, fmt.Errorf("unmarshaling response: %w", err)
+	}
+
+	return &createdTag, nil
 }
 
-// GetIP returns an IP address with the given UID and DNS name.
-func (c *client) GetIP(ctx context.Context, key IPAddressKey) (*IPAddress, error) {
-	params := ipam.NewIpamIPAddressesListParamsWithContext(ctx)
-	params.SetDNSName(&key.DNSName)
-	var limit int64 = 100
-	params.SetLimit(pointer.Int64(limit))
+// GetIP returns an IP address with the given ID.
+func (c *client) GetIP(ctx context.Context, uid UID) (*IPAddress, error) {
+	url := fmt.Sprintf("%s/ipam/ip-addresses/?cf_%s=%s", c.baseURL, UIDCustomFieldName, uid)
 
-	// technically, there can be an unlimited number of IPs with the given DNSName;
-	// even though realistically that shouldn't be the case, we still iterate over
-	// multiple pages of results if necessary
-	var offset int64
-	for {
-		params.SetOffset(pointer.Int64(offset))
-		res, err := c.Ipam.IpamIPAddressesList(params, nil)
-		if err != nil {
-			return nil, fmt.Errorf("cannot lookup IPs: %w", err)
-		}
-
-		for _, netboxIP := range res.GetPayload().Results {
-			ip := ipAddressFromNetBox(netboxIP)
-			if ip.UID == key.UID {
-				return ip, nil
-			}
-		}
-
-		if res.GetPayload().Next == nil {
-			// we've reached the last page, nothing more to fetch
-			break
-		}
-
-		offset = offset + limit
+	data, err := c.executeRequest(ctx, url, http.MethodGet, nil)
+	if err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
-	return nil, nil
+	var ipList IPAddressList
+	if err := json.Unmarshal(data, &ipList); err != nil {
+		return nil, fmt.Errorf("unmarshaling response: %w", err)
+	}
+
+	if len(ipList.Results) > 1 {
+		// may happen either when a duplicate is accidentally created,
+		// or if the UID custom field hasn't been created (in this case
+		// NetBox won't do any filtering at all)
+		return nil, fmt.Errorf("more than one IP with UID %q found", uid)
+	}
+	if len(ipList.Results) == 0 {
+		return nil, nil
+	}
+
+	return &ipList.Results[0], nil
 }
 
 // UpsertIP creates an IP address or updates one, if an IP with the same
-// UID and DNS name already exists.
+// UID already exists.
 func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error) {
-	existingIP, err := c.GetIP(ctx, IPAddressKey{UID: ip.UID, DNSName: ip.DNSName})
+	existingIP, err := c.GetIP(ctx, ip.UID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("checking for existing IP: %w", err)
 	}
 
 	if existingIP != nil && !existingIP.changed(ip) {
@@ -202,51 +202,96 @@ func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error
 		return nil, nil
 	}
 
-	netboxIP, err := ip.toNetBox()
-	if err != nil {
-		return nil, fmt.Errorf("converting: %w", err)
-	}
-
+	var data []byte
 	if existingIP != nil {
-		params := ipam.NewIpamIPAddressesUpdateParamsWithContext(ctx)
-		params.SetID(existingIP.id)
-		params.SetData(netboxIP)
-
-		res, err := c.Ipam.IpamIPAddressesUpdate(params, nil)
-		if err != nil {
-			return nil, fmt.Errorf("cannot update IP: %w", err)
-		}
-
-		return ipAddressFromNetBox(res.GetPayload()), nil
+		url := fmt.Sprintf("%s/ipam/ip-addresses/%d/", c.baseURL, existingIP.ID)
+		data, err = c.executeRequest(ctx, url, http.MethodPut, ip)
+	} else {
+		url := fmt.Sprintf("%s/ipam/ip-addresses/", c.baseURL)
+		data, err = c.executeRequest(ctx, url, http.MethodPost, ip)
 	}
-
-	params := ipam.NewIpamIPAddressesCreateParamsWithContext(ctx)
-	params.SetData(netboxIP)
-
-	res, err := c.Ipam.IpamIPAddressesCreate(params, nil)
 	if err != nil {
-		return nil, fmt.Errorf("cannot create IP: %w", err)
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
-	return ipAddressFromNetBox(res.GetPayload()), nil
+	var createdIP IPAddress
+	if err := json.Unmarshal(data, &createdIP); err != nil {
+		return nil, fmt.Errorf("unmarshaling response: %w", err)
+	}
+
+	return &createdIP, nil
 }
 
-// DeleteIP deletes an IP with the given UID and DNS name from NetBox.
-func (c *client) DeleteIP(ctx context.Context, key IPAddressKey) error {
-	ip, err := c.GetIP(ctx, key)
+// DeleteIP deletes an IP with the given UID from NetBox.
+func (c *client) DeleteIP(ctx context.Context, uid UID) error {
+	existingIP, err := c.GetIP(ctx, uid)
 	if err != nil {
-		return err
+		return fmt.Errorf("checking if IP exists: %w", err)
 	}
 
-	if ip == nil {
+	if existingIP == nil {
 		return nil
 	}
 
-	params := ipam.NewIpamIPAddressesDeleteParamsWithContext(ctx)
-	params.SetID(ip.id)
-
-	if _, err := c.Ipam.IpamIPAddressesDelete(params, nil); err != nil {
-		return fmt.Errorf("cannot delete IP: %w", err)
+	url := fmt.Sprintf("%s/ipam/ip-addresses/%d/", c.baseURL, existingIP.ID)
+	if _, err := c.executeRequest(ctx, url, http.MethodDelete, nil); err != nil {
+		return fmt.Errorf("executing request: %w", err)
 	}
+
 	return nil
+}
+
+func (c *client) executeRequest(ctx context.Context, url string, method string, body interface{}) ([]byte, error) {
+	var b []byte
+	var err error
+	if body != nil {
+		if b, err = json.Marshal(body); err != nil {
+			return nil, fmt.Errorf("marshaling body: %w", err)
+		}
+	}
+
+	req, err := retryablehttp.NewRequest(method, url, b)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	req = req.WithContext(ctx)
+
+	req.Header.Set("Accept", "application/json")
+	if b != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
+	}
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if err := httpErrorFrom(res); err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
+	if err != nil {
+		return nil, errors.New("reading response data")
+	}
+	return data, err
+}
+
+func httpErrorFrom(res *http.Response) error {
+	if c := res.StatusCode; 200 <= c && c <= 299 {
+		return nil
+	}
+
+	data, err := ioutil.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
+	if err != nil {
+		return fmt.Errorf("read error response data: %w", err)
+	}
+	if len(data) > 0 {
+		return fmt.Errorf("%s: %s", res.Status, strings.TrimSpace(string(data)))
+	}
+	return errors.New(res.Status)
 }
