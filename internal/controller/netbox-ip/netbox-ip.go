@@ -2,6 +2,7 @@ package netboxip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	netboxctrl "github.com/digitalocean/netbox-ip-controller"
@@ -28,6 +29,13 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 		if err := o(&s); err != nil {
 			return nil, err
 		}
+	}
+
+	if s.NetBoxClient == nil {
+		return nil, errors.New("netbox client is required for netboxip controller")
+	}
+	if err := s.NetBoxClient.UpsertUIDField(context.Background()); err != nil {
+		return nil, fmt.Errorf("upserting UID field: %w", err)
 	}
 
 	return &controller{

@@ -2,6 +2,7 @@ package netbox
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 
@@ -19,15 +20,54 @@ type CustomField struct {
 	ValidationRegex string `json:"validation_regex,omitempty"`
 	// Type is the type of the field.
 	// Possible values: text, longtext, integer, boolean, date, url, json, select, multiselect
-	Type string `json:"type"`
+	Type LabeledString `json:"type"`
 	// ContentTypes is the list of modelt to which the custom field is added.
 	// Should be in format "domain.object", e.g. "ipam.ipaddress".
 	ContentTypes []string `json:"content_types"`
 	// FilterLogic can be one of: disabled, loose, exact. Specified how the field
 	// will be matched when persorming a query.
-	FilterLogic string `json:"filter_logic,omitempty"`
+	FilterLogic LabeledString `json:"filter_logic,omitempty"`
 	// Weight is for display purposes: fields with higher weights appear lower in a form.
 	Weight int64 `json:"weight,omitempty"`
+}
+
+// LabeledString represents the kind of field in NetBox which is a string
+// upon writing to NetBox, but is an object {"value": "string", "label": "string"},
+// upon retrieving from NetBox.
+type LabeledString string
+
+// UnmarshalJSON implements the json.Unmarshaler interface for LabeledString.
+func (v *LabeledString) UnmarshalJSON(b []byte) error {
+	var obj interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return fmt.Errorf("unmarshaling labeled string: %w", err)
+	}
+
+	switch ot := obj.(type) {
+	case string:
+		*v = LabeledString(ot)
+	case map[string]interface{}:
+		val, ok := ot["value"]
+		if !ok {
+			return errors.New("cannot unmarshal labeled string: \"value\" is missing")
+		}
+		if s, ok := val.(string); ok {
+			*v = LabeledString(s)
+		} else {
+			return errors.New("cannot unmarshal labeled string: \"value\" is not a string")
+		}
+	default:
+		return errors.New("cannot unmarshal labeled string: neither a string nor a map[string]string")
+	}
+
+	return nil
+}
+
+// CustomFieldList represents the response from the NetBox endpoints that return
+// multiple custom fields.
+type CustomFieldList struct {
+	Count   uint          `json:"count"`
+	Results []CustomField `json:"results"`
 }
 
 // Tag represents a NetBox tag.

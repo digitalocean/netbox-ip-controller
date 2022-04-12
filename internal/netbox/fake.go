@@ -68,7 +68,7 @@ func (c *fakeClient) DeleteIP(_ context.Context, uid UID) error {
 	return nil
 }
 
-// CreateUIDField is a noop.
-func (c *fakeClient) CreateUIDField(ctx context.Context) error {
+// UpsertUIDField is a noop.
+func (c *fakeClient) UpsertUIDField(ctx context.Context) error {
 	return nil
 }

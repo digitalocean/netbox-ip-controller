@@ -8,6 +8,69 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func TestCustomFieldUnmarshaling(t *testing.T) {
+	tests := []struct {
+		name                string
+		data                string
+		expectedCustomField *CustomField
+		shouldError         bool
+	}{{
+		name:                "empty",
+		data:                "{}",
+		expectedCustomField: &CustomField{},
+	}, {
+		name: "with labeled fields as objects",
+		data: `{
+			"type": {
+			  "value": "text",
+			  "label": "Text"
+			},
+			"filter_logic": {
+			  "value": "exact",
+			  "label": "Exact"
+			}
+		}`,
+		expectedCustomField: &CustomField{
+			Type:        "text",
+			FilterLogic: "exact",
+		},
+	}, {
+		name: "with labeled fields as strings",
+		data: `{
+			"type": "text",
+			"filter_logic": "exact"
+		}`,
+		expectedCustomField: &CustomField{
+			Type:        "text",
+			FilterLogic: "exact",
+		},
+	}, {
+		name: "with labeled fields as unexpected values",
+		data: `{
+			"type": 123
+		}`,
+		shouldError: true,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var field CustomField
+			err := json.Unmarshal([]byte(test.data), &field)
+			if !test.shouldError && err != nil {
+				t.Errorf("want no error, got %q\n", err)
+			} else if test.shouldError && err == nil {
+				t.Error("want an error, got nil")
+			}
+
+			if !test.shouldError {
+				if diff := cmp.Diff(test.expectedCustomField, &field); diff != "" {
+					t.Errorf("(-want, +got)\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
 func TestIPAddressUnmarshaling(t *testing.T) {
 	tests := []struct {
 		name        string

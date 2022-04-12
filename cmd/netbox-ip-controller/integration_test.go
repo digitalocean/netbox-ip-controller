@@ -446,11 +446,6 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 		return nil, fmt.Errorf("setting up netbox client: %w", err)
 	}
 
-	if err := netboxClient.CreateUIDField(ctx); err != nil {
-		stop()
-		return nil, fmt.Errorf("creating UID field: %w", err)
-	}
-
 	ctx, cancel := context.WithCancel(ctx)
 	cfg := &config{
 		netboxAPIURL:  netboxAPIURL,

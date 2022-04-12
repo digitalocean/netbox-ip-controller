@@ -36,7 +36,7 @@ type Client interface {
 	GetIP(ctx context.Context, uid UID) (*IPAddress, error)
 	UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error)
 	DeleteIP(ctx context.Context, uid UID) error
-	CreateUIDField(ctx context.Context) error
+	UpsertUIDField(ctx context.Context) error
 }
 
 type client struct {
@@ -92,9 +92,19 @@ func retryableHTTPClient(retryMax int) *retryablehttp.Client {
 // (e.g. PUT /someobj/1/, DELETE /someobj/1/): without it, NetBox will always return
 // 200 without actually making any changes ¯\_(ツ)_/¯
 
-// CreateUIDField adds a custom field with name UIDCustomFieldName
-// to NetBox IPAddresses.
-func (c *client) CreateUIDField(ctx context.Context) error {
+// UpsertUIDField adds a custom field with name UIDCustomFieldName
+// to NetBox IPAddresses if it doesn't exist.
+func (c *client) UpsertUIDField(ctx context.Context) error {
+	existingField, err := c.getCustomUIDField(ctx)
+	if err != nil {
+		return fmt.Errorf("checking for existing UID field: %w", err)
+	}
+
+	if existingField != nil {
+		log.L().Info("UID field already exists")
+		return nil
+	}
+
 	url := fmt.Sprintf("%s/extras/custom-fields/", c.baseURL)
 
 	field := CustomField{
@@ -113,6 +123,30 @@ func (c *client) CreateUIDField(ctx context.Context) error {
 		return fmt.Errorf("executing request: %w", err)
 	}
 	return nil
+}
+
+func (c *client) getCustomUIDField(ctx context.Context) (*CustomField, error) {
+	url := fmt.Sprintf("%s/extras/custom-fields/?name=%s", c.baseURL, UIDCustomFieldName)
+
+	data, err := c.executeRequest(ctx, url, http.MethodGet, nil)
+	if err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
+	}
+
+	var fieldList CustomFieldList
+	if err := json.Unmarshal(data, &fieldList); err != nil {
+		return nil, fmt.Errorf("unmarshaling response: %w", err)
+	}
+
+	if len(fieldList.Results) > 1 {
+		// should never happen since names of custom fields must be unique
+		return nil, fmt.Errorf("more than one custom field %q found", UIDCustomFieldName)
+	}
+	if len(fieldList.Results) == 0 {
+		return nil, nil
+	}
+
+	return &fieldList.Results[0], nil
 }
 
 // GetTag returns a tag with the given name.
