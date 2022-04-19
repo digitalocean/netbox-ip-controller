@@ -13,6 +13,7 @@ import (
 	log "go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimecontroller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -53,6 +54,9 @@ func (c *controller) AddToManager(mgr manager.Manager) error {
 		Named("netboxip").
 		For(&v1beta1.NetBoxIP{}).
 		WithEventFilter(ctrl.OnCreateAndUpdateFilter).
+		// with > 1 concurrent reconciles, we'd be risking creating
+		// duplicate IPs in NetBox
+		WithOptions(runtimecontroller.Options{MaxConcurrentReconciles: 1}).
 		Complete(c.reconciler)
 }
 
