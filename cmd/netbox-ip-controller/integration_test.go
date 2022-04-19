@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	crd "github.com/digitalocean/netbox-ip-controller/api/netbox"
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	crdclient "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
@@ -21,10 +22,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
@@ -115,7 +118,7 @@ func TestPod(t *testing.T) {
 				return err
 			})
 		if err != nil {
-			t.Errorf("waiting for netboxip: %w", err)
+			t.Errorf("waiting for netboxip: %q", err)
 		}
 
 		expectedIP := &netbox.IPAddress{
@@ -149,6 +152,10 @@ func TestPod(t *testing.T) {
 			t.Error(err)
 		}
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env.startController(ctx)
 
 	env.WithNamespace(namespace, t, testFunc)
 }
@@ -193,7 +200,7 @@ func TestService(t *testing.T) {
 				return err
 			})
 		if err != nil {
-			t.Errorf("waiting for netboxip: %w", err)
+			t.Errorf("waiting for netboxip: %q", err)
 		}
 
 		expectedIP := &netbox.IPAddress{
@@ -226,6 +233,10 @@ func TestService(t *testing.T) {
 			t.Error(err)
 		}
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env.startController(ctx)
 
 	env.WithNamespace(namespace, t, testFunc)
 }
@@ -305,7 +316,91 @@ func TestNetBoxIP(t *testing.T) {
 		}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env.startController(ctx)
+
 	env.WithNamespace(namespace, t, testFunc)
+}
+
+func TestClean(t *testing.T) {
+	namespace := "testclean"
+	var uids []netbox.UID
+	createIPs := func() {
+		for i := uint8(1); i < 3; i++ {
+			addr := net.IPv4(192, 168, 0, i)
+			name := fmt.Sprintf("foo-%d", i)
+
+			ip := &v1beta1.NetBoxIP{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: "v1beta1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: v1beta1.IP(addr),
+					DNSName: name,
+				},
+			}
+
+			var err error
+			ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Create(context.Background(), ip, metav1.CreateOptions{})
+			if err != nil {
+				t.Fatalf("creating netboxip: %q\n", err)
+			}
+
+			uids = append(uids, netbox.UID(ip.UID))
+			expectedIPInNetBox := &netbox.IPAddress{
+				UID:     netbox.UID(ip.UID),
+				Address: netbox.IP(addr),
+				DNSName: name,
+			}
+
+			if _, err := env.WaitForIP(expectedIPInNetBox); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	env.startController(ctx)
+	env.WithNamespace(namespace, t, createIPs)
+	cancel()
+
+	// cleanup after stopping controller
+	cfg := &globalConfig{
+		netboxAPIURL: netboxAPIURL,
+		netboxToken:  netboxToken,
+		kubeConfig:   env.KubeConfig,
+	}
+	ctx = context.Background()
+	if err := clean(ctx, cfg); err != nil {
+		t.Error(err)
+	}
+
+	// check that IPs are removed from NetBox
+	for _, uid := range uids {
+		ip, err := env.NetboxClient.GetIP(ctx, uid)
+		if err != nil {
+			t.Errorf("unexpected error when checking if IP address exists: %v", err)
+		} else if ip != nil {
+			t.Errorf("want IP not to exist, got %v", ip)
+		}
+	}
+
+	// check that netboxip CRD was removed
+	extensionsClient, err := apiextensionsclient.NewForConfig(env.KubeConfig)
+	if err != nil {
+		t.Fatalf("creating API extensions client: %v", err)
+	}
+
+	_, err = extensionsClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crd.NetBoxIPCRDName, metav1.GetOptions{})
+	if !kubeerrors.IsNotFound(err) {
+		t.Errorf("want 'Not Found' error when retrieving netboxip CRD, got %v", err)
+	}
 }
 
 func (env *testEnv) WithNamespace(namespace string, t *testing.T, f func()) {
@@ -354,6 +449,7 @@ func (env *testEnv) WaitForIP(ip *netbox.IPAddress) (*netbox.IPAddress, error) {
 			cmpopts.SortSlices(func(t1, t2 netbox.Tag) bool { return t1.Name < t2.Name }),
 			cmpopts.IgnoreFields(netbox.IPAddress{}, "ID"),
 			cmpopts.IgnoreFields(netbox.Tag{}, "ID"),
+			cmpopts.EquateEmpty(),
 		)
 		if diff != "" {
 			return fmt.Errorf("%w:\n (-want, +got)\n%s", notFoundErr, diff)
@@ -382,6 +478,7 @@ func (env *testEnv) WaitForIPDeletion(uid netbox.UID) error {
 
 // A testEnv provides access to a test environment control plane.
 type testEnv struct {
+	KubeConfig    *rest.Config
 	KubeClient    *kubernetes.Clientset
 	KubeCRDClient *crdclient.Clientset
 	NetboxClient  netbox.Client
@@ -446,11 +543,22 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 		return nil, fmt.Errorf("setting up netbox client: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	cfg := &config{
-		netboxAPIURL:  netboxAPIURL,
-		netboxToken:   netboxToken,
-		kubeConfig:    restConfig,
+	return &testEnv{
+		KubeConfig:    restConfig,
+		KubeClient:    kubeClient,
+		KubeCRDClient: kubeCRDClient,
+		NetboxClient:  netboxClient,
+		stop:          stop,
+	}, nil
+}
+
+func (env *testEnv) startController(ctx context.Context) {
+	globalCfg := &globalConfig{
+		netboxAPIURL: netboxAPIURL,
+		netboxToken:  netboxToken,
+		kubeConfig:   env.KubeConfig,
+	}
+	cfg := &rootConfig{
 		podTags:       []string{"kubernetes", "k8s-pod"},
 		podLabels:     map[string]bool{"app": true},
 		serviceTags:   []string{"kubernetes", "k8s-service"},
@@ -458,17 +566,8 @@ func newTestEnv(ctx context.Context) (*testEnv, error) {
 		clusterDomain: "cluster.local",
 	}
 	go func() {
-		if err := realMain(ctx, cfg); err != nil && err != context.Canceled {
+		if err := run(ctx, globalCfg, cfg); err != nil && err != context.Canceled {
 			log.L().Error("netbox-ip-controller stopped running", log.Error(err))
-			stop()
-			cancel()
 		}
 	}()
-
-	return &testEnv{
-		KubeClient:    kubeClient,
-		KubeCRDClient: kubeCRDClient,
-		NetboxClient:  netboxClient,
-		stop:          stop,
-	}, nil
 }
