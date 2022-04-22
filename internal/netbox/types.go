@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -88,10 +88,8 @@ type IPAddress struct {
 	ID int64 `json:"id,omitempty"`
 	// UID is the UID of the object that this IP is assigned to.
 	// It is stored in NetBox as a custom field.
-	UID     UID    `json:"custom_fields,omitempty"`
-	DNSName string `json:"dns_name,omitempty"`
-	// TODO(dasha): in go 1.18, there's a new net/netip package with
-	// a better (immutable and comparable) netip.Addr
+	UID         UID    `json:"custom_fields,omitempty"`
+	DNSName     string `json:"dns_name,omitempty"`
 	Address     IP     `json:"address,omitempty"`
 	Tags        []Tag  `json:"tags,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -130,7 +128,7 @@ func (uid UID) MarshalJSON() ([]byte, error) {
 
 // IP is the type for representing address from NetBox.
 // Its purpose is to provide custom marshaling and unmarshaling.
-type IP net.IP
+type IP netip.Addr
 
 // UnmarshalJSON implements the json.Unmarshaler interface for IP.
 func (ip *IP) UnmarshalJSON(b []byte) error {
@@ -138,32 +136,31 @@ func (ip *IP) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &addrStr); err != nil {
 		return fmt.Errorf("unmarshaling address to string: %w", err)
 	}
-	addr, _, err := net.ParseCIDR(addrStr)
+	p, err := netip.ParsePrefix(addrStr)
 	if err != nil {
 		return fmt.Errorf("parsing address: %w", err)
 	}
-	*ip = IP(addr)
+	*ip = IP(p.Addr())
 	return nil
 }
 
 // MarshalText implements the encoding.TextMarshaler interface for IP.
 func (ip IP) MarshalText() ([]byte, error) {
-	var cidrSuffix string
-
-	// net.IP.To4() returns nil if the address is not an IPv4 address,
-	// and net.IP.To16() - if not a valid IPv6
-	isValidIPv4 := (net.IP(ip).To4() != nil)
-	isValidIPv6 := (net.IP(ip).To16() != nil)
-
-	if isValidIPv4 && isValidIPv6 {
-		cidrSuffix = "32"
-	} else if isValidIPv6 && !isValidIPv4 {
-		cidrSuffix = "128"
-	} else {
-		return nil, fmt.Errorf("%q is not a valid IPv4 or IPv6 address", ip)
+	if netip.Addr(ip).BitLen() == 0 {
+		return netip.Addr(ip).MarshalText()
 	}
 
-	return []byte(fmt.Sprintf("%s/%s", net.IP(ip).String(), cidrSuffix)), nil
+	var cidrSuffix string
+	if netip.Addr(ip).Is4() {
+		cidrSuffix = "32"
+	} else if netip.Addr(ip).Is6() {
+		cidrSuffix = "128"
+	} else {
+		// shouldn't ever happen
+		return nil, fmt.Errorf("%v is not a valid IPv4 or IPv6 address", ip)
+	}
+
+	return []byte(fmt.Sprintf("%s/%s", netip.Addr(ip).String(), cidrSuffix)), nil
 }
 
 func (ip *IPAddress) changed(ip2 *IPAddress) bool {
@@ -180,6 +177,6 @@ func (ip *IPAddress) changed(ip2 *IPAddress) bool {
 	return !cmp.Equal(ip, ip2,
 		cmpopts.SortSlices(sortTags),
 		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreUnexported(IPAddress{}, Tag{}),
+		cmpopts.IgnoreUnexported(IP{}),
 	)
 }

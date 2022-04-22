@@ -4,7 +4,7 @@ NAME := netbox-ip-controller
 IMAGE := "${NAME}:$(GITCOMMIT)"
 
 K8S_VERSION := 1.22.5
-GO_VERSION := 1.17.0
+GO_VERSION := 1.18
 
 ifeq ($(strip $(shell git status --porcelain 2>/dev/null)),)
 	GIT_TREE_STATE=clean

@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 
 	netboxctrl "github.com/digitalocean/netbox-ip-controller"
@@ -82,7 +82,7 @@ func TestReconcile(t *testing.T) {
 				}},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -170,7 +170,7 @@ func TestReconcile(t *testing.T) {
 				}},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -209,7 +209,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: namespace,
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(10, 0, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 			},
 		},
 		expectedNetBoxIP: &v1beta1.NetBoxIP{
@@ -231,7 +231,7 @@ func TestReconcile(t *testing.T) {
 				}},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -283,7 +283,7 @@ func TestReconcile(t *testing.T) {
 			if test.expectedNetBoxIP == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want NetBoxIP not to exist, got %v\n", actualNetBoxIP)
 			} else if test.expectedNetBoxIP != nil {
-				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")); diff != "" {
+				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmpopts.IgnoreUnexported(netip.Addr{})); diff != "" {
 					t.Errorf("NetBoxIP object (-want, +got)\n%s", diff)
 				}
 			}

@@ -1,7 +1,7 @@
 package v1beta1
 
 import (
-	"net"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -10,51 +10,6 @@ import (
 	apiservervalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-func TestIPUnmarshalText(t *testing.T) {
-	tests := []struct {
-		name  string
-		ipStr string
-		ip    net.IP
-		valid bool
-	}{{
-		name:  "empty",
-		ipStr: "",
-		ip:    nil,
-		valid: false,
-	}, {
-		name:  "valid IPv4",
-		ipStr: "192.168.0.1",
-		ip:    net.IPv4(192, 168, 0, 1),
-		valid: true,
-	}, {
-		name:  "valid IPv6",
-		ipStr: "1:2::3",
-		ip:    net.IP{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3},
-		valid: true,
-	}, {
-		name:  "invalid",
-		ipStr: "not-an-ip",
-		ip:    nil,
-		valid: false,
-	}}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			var ip IP
-			err := ip.UnmarshalText([]byte(test.ipStr))
-			if err != nil && test.valid {
-				t.Errorf("want no error, got %q\n", err)
-			} else if err == nil && !test.valid {
-				t.Error("want error, nil")
-			}
-
-			if !test.ip.Equal(net.IP(ip)) {
-				t.Errorf("want %v, got %v\n", test.ip, net.IP(ip))
-			}
-		})
-	}
-}
 
 func TestValidationSchema(t *testing.T) {
 	var schema apiextensions.CustomResourceValidation
@@ -81,14 +36,14 @@ func TestValidationSchema(t *testing.T) {
 	}, {
 		name: "invalid dns name",
 		netboxIPSpec: NetBoxIPSpec{
-			Address: IP(net.IPv4(8, 8, 8, 8)),
+			Address: netip.AddrFrom4([4]byte{8, 8, 8, 8}),
 			DNSName: "!?not.valid.dns.",
 		},
 		valid: false,
 	}, {
 		name: "description too long",
 		netboxIPSpec: NetBoxIPSpec{
-			Address:     IP(net.IPv4(8, 8, 8, 8)),
+			Address:     netip.AddrFrom4([4]byte{8, 8, 8, 8}),
 			DNSName:     "valid.dns",
 			Description: strings.Repeat("12345", 50),
 		},
@@ -96,7 +51,7 @@ func TestValidationSchema(t *testing.T) {
 	}, {
 		name: "invalid tag slug",
 		netboxIPSpec: NetBoxIPSpec{
-			Address: IP(net.IPv4(8, 8, 8, 8)),
+			Address: netip.AddrFrom4([4]byte{8, 8, 8, 8}),
 			DNSName: "valid.dns",
 			Tags: []Tag{{
 				Name: "good",
@@ -107,7 +62,7 @@ func TestValidationSchema(t *testing.T) {
 	}, {
 		name: "valid with tags",
 		netboxIPSpec: NetBoxIPSpec{
-			Address: IP(net.IPv4(8, 8, 8, 8)),
+			Address: netip.AddrFrom4([4]byte{8, 8, 8, 8}),
 			DNSName: "valid.dns",
 			Tags: []Tag{{
 				Name: "good",
@@ -118,7 +73,7 @@ func TestValidationSchema(t *testing.T) {
 	}, {
 		name: "valid with single-domain dns",
 		netboxIPSpec: NetBoxIPSpec{
-			Address: IP(net.IPv4(8, 8, 8, 8)),
+			Address: netip.AddrFrom4([4]byte{8, 8, 8, 8}),
 			DNSName: "foo",
 		},
 		valid: true,

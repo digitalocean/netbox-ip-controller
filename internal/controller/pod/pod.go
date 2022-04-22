@@ -3,7 +3,7 @@ package pod
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"strings"
 
 	netboxctrl "github.com/digitalocean/netbox-ip-controller"
@@ -93,7 +93,10 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	ip := r.netboxipFromPod(&pod)
+	ip, err := r.netboxipFromPod(&pod)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	if err := ctrl.DeclareOwner(ip, &pod); err != nil {
 		return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
 	}
@@ -109,7 +112,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
 }
 
-func (r *reconciler) netboxipFromPod(pod *corev1.Pod) *v1beta1.NetBoxIP {
+func (r *reconciler) netboxipFromPod(pod *corev1.Pod) (*v1beta1.NetBoxIP, error) {
 	labels := []string{fmt.Sprintf("namespace: %s", pod.Namespace)}
 	for key, value := range pod.Labels {
 		if r.labels[key] {
@@ -125,6 +128,15 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod) *v1beta1.NetBoxIP {
 		})
 	}
 
+	var addr netip.Addr
+	if pod.Status.PodIP != "" {
+		var err error
+		addr, err = netip.ParseAddr(pod.Status.PodIP)
+		if err != nil {
+			return nil, fmt.Errorf("invalid IP address: %w", err)
+		}
+	}
+
 	ip := &v1beta1.NetBoxIP{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       netboxcrd.NetBoxIPKind,
@@ -138,12 +150,12 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod) *v1beta1.NetBoxIP {
 			},
 		},
 		Spec: v1beta1.NetBoxIPSpec{
-			Address:     v1beta1.IP(net.ParseIP(pod.Status.PodIP)),
+			Address:     addr,
 			DNSName:     pod.Name,
 			Tags:        tags,
 			Description: strings.Join(labels, ", "),
 		},
 	}
 
-	return ip
+	return ip, nil
 }

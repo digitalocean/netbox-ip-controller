@@ -2,7 +2,7 @@ package netboxip
 
 import (
 	"context"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -56,7 +56,7 @@ func TestReconcile(t *testing.T) {
 				UID:       types.UID(uid),
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: name,
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -66,7 +66,7 @@ func TestReconcile(t *testing.T) {
 		},
 		expectedIPInNetBox: &netbox.IPAddress{
 			UID:     netbox.UID(uid),
-			Address: netbox.IP(net.IPv4(192, 168, 0, 1)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "bar",
@@ -85,7 +85,7 @@ func TestReconcile(t *testing.T) {
 				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: name,
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -97,7 +97,7 @@ func TestReconcile(t *testing.T) {
 		name: "existing netboxip updated",
 		existingIPInNetBox: &netbox.IPAddress{
 			UID:     netbox.UID(uid),
-			Address: netbox.IP(net.IPv4(172, 16, 0, 1)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "fuz",
@@ -116,7 +116,7 @@ func TestReconcile(t *testing.T) {
 				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: name,
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -126,7 +126,7 @@ func TestReconcile(t *testing.T) {
 		},
 		expectedIPInNetBox: &netbox.IPAddress{
 			UID:     netbox.UID(uid),
-			Address: netbox.IP(net.IPv4(192, 168, 0, 1)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "bar",
@@ -145,7 +145,7 @@ func TestReconcile(t *testing.T) {
 				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: name,
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -157,7 +157,7 @@ func TestReconcile(t *testing.T) {
 		name: "netboxip deleted",
 		existingIPInNetBox: &netbox.IPAddress{
 			UID:     netbox.UID(uid),
-			Address: netbox.IP(net.IPv4(172, 16, 0, 1)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			DNSName: name,
 			Tags: []netbox.Tag{{
 				Name: "fuz",
@@ -177,7 +177,7 @@ func TestReconcile(t *testing.T) {
 				DeletionTimestamp: &now,
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: name,
 				Tags: []v1beta1.Tag{{
 					Name: "bar",
@@ -223,7 +223,7 @@ func TestReconcile(t *testing.T) {
 				t.Errorf("fetching IP from NetBox: %q\n", err)
 			}
 
-			if diff := cmp.Diff(test.expectedIPInNetBox, actualIPInNetBox, cmpopts.IgnoreUnexported(netbox.IPAddress{}, netbox.Tag{})); diff != "" {
+			if diff := cmp.Diff(test.expectedIPInNetBox, actualIPInNetBox, cmpopts.IgnoreUnexported(netbox.IP{})); diff != "" {
 				t.Errorf("IP in NetBox (-want, +got)\n%s", diff)
 			}
 
@@ -236,7 +236,7 @@ func TestReconcile(t *testing.T) {
 			if test.expectedNetBoxIPObj == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want NetBoxIP not to exist, got %v\n", actualNetBoxIPObj)
 			} else if test.expectedNetBoxIPObj != nil {
-				if diff := cmp.Diff(test.expectedNetBoxIPObj, &actualNetBoxIPObj, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion")); diff != "" {
+				if diff := cmp.Diff(test.expectedNetBoxIPObj, &actualNetBoxIPObj, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmpopts.IgnoreUnexported(netip.Addr{})); diff != "" {
 					t.Errorf("NetBoxIP object (-want, +got)\n%s", diff)
 				}
 			}

@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"strings"
 
 	netboxctrl "github.com/digitalocean/netbox-ip-controller"
@@ -90,7 +90,10 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	ip := r.netboxipFromService(&svc)
+	ip, err := r.netboxipFromService(&svc)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	if err := ctrl.DeclareOwner(ip, &svc); err != nil {
 		return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
 	}
@@ -111,7 +114,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
 }
 
-func (r *reconciler) netboxipFromService(svc *corev1.Service) *v1beta1.NetBoxIP {
+func (r *reconciler) netboxipFromService(svc *corev1.Service) (*v1beta1.NetBoxIP, error) {
 	var labels []string
 	for key, value := range svc.Labels {
 		if r.labels[key] {
@@ -127,6 +130,15 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service) *v1beta1.NetBoxIP 
 		})
 	}
 
+	var addr netip.Addr
+	if svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None" {
+		var err error
+		addr, err = netip.ParseAddr(svc.Spec.ClusterIP)
+		if err != nil {
+			return nil, fmt.Errorf("invalid IP address: %w", err)
+		}
+	}
+
 	ip := &v1beta1.NetBoxIP{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       netboxcrd.NetBoxIPKind,
@@ -140,12 +152,12 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service) *v1beta1.NetBoxIP 
 			},
 		},
 		Spec: v1beta1.NetBoxIPSpec{
-			Address:     v1beta1.IP(net.ParseIP(svc.Spec.ClusterIP)),
+			Address:     addr,
 			DNSName:     fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, r.clusterDomain),
 			Tags:        tags,
 			Description: strings.Join(labels, ", "),
 		},
 	}
 
-	return ip
+	return ip, nil
 }

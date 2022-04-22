@@ -8,7 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -124,7 +124,7 @@ func TestPod(t *testing.T) {
 		expectedIP := &netbox.IPAddress{
 			UID:     netbox.UID(netboxip.UID),
 			DNSName: pod.Name,
-			Address: netbox.IP(net.IPv4(172, 17, 0, 1)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "k8s-pod", Slug: "k8s-pod"},
@@ -206,7 +206,7 @@ func TestService(t *testing.T) {
 		expectedIP := &netbox.IPAddress{
 			UID:     netbox.UID(netboxip.UID),
 			DNSName: fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, svc.Namespace),
-			Address: netbox.IP(net.IPv4(192, 168, 0, 5)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "k8s-service", Slug: "k8s-service"},
@@ -255,7 +255,7 @@ func TestNetBoxIP(t *testing.T) {
 				Namespace: namespace,
 			},
 			Spec: v1beta1.NetBoxIPSpec{
-				Address: v1beta1.IP(net.IPv4(192, 168, 0, 1)),
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
 				DNSName: "foo",
 				Tags: []v1beta1.Tag{{
 					Name: "kubernetes",
@@ -275,7 +275,7 @@ func TestNetBoxIP(t *testing.T) {
 		expectedIPInNetBox := &netbox.IPAddress{
 			UID:     netbox.UID(ip.UID),
 			DNSName: "foo",
-			Address: netbox.IP(net.IPv4(192, 168, 0, 1)),
+			Address: netbox.IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 			Tags: []netbox.Tag{
 				{Name: "kubernetes", Slug: "kubernetes"},
 			},
@@ -328,7 +328,7 @@ func TestClean(t *testing.T) {
 	var uids []netbox.UID
 	createIPs := func() {
 		for i := uint8(1); i < 3; i++ {
-			addr := net.IPv4(192, 168, 0, i)
+			addr := netip.AddrFrom4([4]byte{192, 168, 0, i})
 			name := fmt.Sprintf("foo-%d", i)
 
 			ip := &v1beta1.NetBoxIP{
@@ -341,7 +341,7 @@ func TestClean(t *testing.T) {
 					Namespace: namespace,
 				},
 				Spec: v1beta1.NetBoxIPSpec{
-					Address: v1beta1.IP(addr),
+					Address: addr,
 					DNSName: name,
 				},
 			}
@@ -449,6 +449,7 @@ func (env *testEnv) WaitForIP(ip *netbox.IPAddress) (*netbox.IPAddress, error) {
 			cmpopts.SortSlices(func(t1, t2 netbox.Tag) bool { return t1.Name < t2.Name }),
 			cmpopts.IgnoreFields(netbox.IPAddress{}, "ID"),
 			cmpopts.IgnoreFields(netbox.Tag{}, "ID"),
+			cmpopts.IgnoreUnexported(netbox.IP{}),
 			cmpopts.EquateEmpty(),
 		)
 		if diff != "" {

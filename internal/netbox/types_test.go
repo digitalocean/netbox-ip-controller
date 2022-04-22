@@ -2,10 +2,11 @@ package netbox
 
 import (
 	"encoding/json"
-	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestCustomFieldUnmarshaling(t *testing.T) {
@@ -89,7 +90,7 @@ func TestIPAddressUnmarshaling(t *testing.T) {
 		}`,
 		expectedIP: &IPAddress{
 			ID:      123,
-			Address: IP(net.IPv4(192, 168, 0, 1)),
+			Address: IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 		},
 	}, {
 		name: "with IPv6 address",
@@ -99,7 +100,7 @@ func TestIPAddressUnmarshaling(t *testing.T) {
 		}`,
 		expectedIP: &IPAddress{
 			ID:      123,
-			Address: IP(net.IP{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+			Address: IP(netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3})),
 		},
 	}, {
 		name: "with invalid address",
@@ -163,7 +164,7 @@ func TestIPAddressUnmarshaling(t *testing.T) {
 			}
 
 			if !test.shouldError {
-				if diff := cmp.Diff(test.expectedIP, &ip); diff != "" {
+				if diff := cmp.Diff(test.expectedIP, &ip, cmpopts.IgnoreUnexported(IP{})); diff != "" {
 					t.Errorf("(-want, +got)\n%s", diff)
 				}
 			}
@@ -176,16 +177,17 @@ func TestIPAddressMarshaling(t *testing.T) {
 		name         string
 		ip           *IPAddress
 		expectedData string
-		shouldError  bool
 	}{{
-		name:         "empty",
-		ip:           &IPAddress{},
-		expectedData: `{}`,
+		name: "empty",
+		ip:   &IPAddress{},
+		expectedData: `{
+			"address": ""
+		}`,
 	}, {
 		name: "with IPv4 address",
 		ip: &IPAddress{
 			ID:      123,
-			Address: IP(net.IPv4(192, 168, 0, 1)),
+			Address: IP(netip.AddrFrom4([4]byte{192, 168, 0, 1})),
 		},
 		expectedData: `{
 			"id": 123,
@@ -195,19 +197,12 @@ func TestIPAddressMarshaling(t *testing.T) {
 		name: "with IPv6 address",
 		ip: &IPAddress{
 			ID:      123,
-			Address: IP(net.IP{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+			Address: IP(netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3})),
 		},
 		expectedData: `{
 			"id": 123,
 			"address": "1:2::3/128"
 		}`,
-	}, {
-		name: "with invalid address",
-		ip: &IPAddress{
-			ID:      123,
-			Address: IP([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}),
-		},
-		shouldError: true,
 	}, {
 		name: "with uid",
 		ip: &IPAddress{
@@ -216,6 +211,7 @@ func TestIPAddressMarshaling(t *testing.T) {
 		},
 		expectedData: `{
 			"id": 123,
+			"address": "",
 			"custom_fields": {
 				"netbox_ip_controller_uid": "5d9b8cf3-feba-4d73-8075-18b99783b7be"
 			}
@@ -232,6 +228,7 @@ func TestIPAddressMarshaling(t *testing.T) {
 		},
 		expectedData: `{
 			"id": 123,
+			"address": "",
 			"tags": [{
 				"id": 5,
 				"name": "foo",
@@ -244,20 +241,16 @@ func TestIPAddressMarshaling(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var prefix, indent = "", "  "
 			actualData, err := json.MarshalIndent(test.ip, prefix, indent)
-			if !test.shouldError && err != nil {
+			if err != nil {
 				t.Errorf("want no error, got %q\n", err)
-			} else if test.shouldError && err == nil {
-				t.Error("want an error, got nil")
 			}
 
-			if !test.shouldError {
-				diff, err := jsonDiff([]byte(test.expectedData), actualData)
-				if err != nil {
-					t.Fatalf("error comparing json: %s", err)
-				}
-				if diff != "" {
-					t.Errorf("(-want, +got)\n%s", diff)
-				}
+			diff, err := jsonDiff([]byte(test.expectedData), actualData)
+			if err != nil {
+				t.Fatalf("error comparing json: %s", err)
+			}
+			if diff != "" {
+				t.Errorf("(-want, +got)\n%s", diff)
 			}
 		})
 	}
