@@ -189,10 +189,14 @@ func stringSlice(s string) []string {
 	}
 
 	values := strings.Split(s, ",")
-	for i, val := range values {
-		values[i] = strings.TrimSpace(val)
+	var sanitized []string
+	for _, val := range values {
+		trimmed := strings.TrimSpace(val)
+		if trimmed != "" {
+			sanitized = append(sanitized, trimmed)
+		}
 	}
-	return values
+	return sanitized
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {

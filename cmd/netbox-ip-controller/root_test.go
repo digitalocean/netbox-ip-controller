@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,7 +98,7 @@ func TestConfigSetup(t *testing.T) {
 	}
 }
 
-func TestValidation(t *testing.T) {
+func TestRequiredConfiguration(t *testing.T) {
 	tests := []struct {
 		name              string
 		envvars           map[string]string
@@ -139,4 +140,73 @@ func TestValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTagValidation(t *testing.T) {
+	tests := []struct {
+		name                string
+		flags               map[string]string
+		expectedPodTags     []string
+		expectedServiceTags []string
+	}{{
+		name: "service tags only",
+		flags: map[string]string{
+			flagPodIPTags: " foo,   bar, baz,buz",
+		},
+		expectedPodTags:     []string{"foo", "bar", "baz", "buz"},
+		expectedServiceTags: []string{},
+	}, {
+		name: "pod tags only",
+		flags: map[string]string{
+			flagServiceIPTags: "foo,bar , baz ,buz",
+		},
+		expectedPodTags:     []string{},
+		expectedServiceTags: []string{"foo", "bar", "baz", "buz"},
+	}, {
+		name: "service and pod tags",
+		flags: map[string]string{
+			flagPodIPTags: "foo,bar,baz,buz",
+			flagServiceIPTags: "	foo,bar , baz ,buz",
+		},
+		expectedPodTags:     []string{"foo", "bar", "baz", "buz"},
+		expectedServiceTags: []string{"foo", "bar", "baz", "buz"},
+	}, {
+		name: "errant commas",
+		flags: map[string]string{
+			flagPodIPTags:     ",foo,bar,baz,buz,",
+			flagServiceIPTags: "foo,,bar,baz,buz",
+		},
+		expectedPodTags:     []string{"foo", "bar", "baz", "buz"},
+		expectedServiceTags: []string{"foo", "bar", "baz", "buz"},
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := newRootCommand()
+			cfg := rootConfig{}
+
+			for key, value := range test.flags {
+				cmd.Flags().Set(key, value)
+			}
+
+			cfg.setup(cmd)
+
+			err := compareTags(flagPodIPTags, test.expectedPodTags, cfg.podTags)
+			if err != nil {
+				t.Error(err)
+			}
+			err = compareTags(flagServiceIPTags, test.expectedServiceTags, cfg.serviceTags)
+			if err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+func compareTags(tagType string, expected []string, actual []string) error {
+	for i, tag := range expected {
+		if actual[i] != tag {
+			return fmt.Errorf("expected %s %v but got %v", tagType, expected, actual)
+		}
+	}
+	return nil
 }
