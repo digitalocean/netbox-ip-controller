@@ -115,7 +115,13 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	}
 
 	cfg.netboxAPIURL = v.GetString(flagNetBoxAPIURL)
+	if cfg.netboxAPIURL == "" {
+		return fmt.Errorf("%s was not provided", flagNetBoxAPIURL)
+	}
 	cfg.netboxToken = v.GetString(flagNetBoxToken)
+	if cfg.netboxToken == "" {
+		return fmt.Errorf("%s was not provided", flagNetBoxToken)
+	}
 	kubeConfigFile := v.GetString(flagKubeConfig)
 
 	kubeConfig, err := kubeConfig(kubeConfigFile)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -91,6 +92,50 @@ func TestConfigSetup(t *testing.T) {
 
 			if !reflect.DeepEqual(test.expectedConfig, cfg) {
 				t.Errorf("want %v\n got %v\n", test.expectedConfig, cfg)
+			}
+		})
+	}
+}
+
+func TestValidation(t *testing.T) {
+	tests := []struct {
+		name              string
+		envvars           map[string]string
+		flags             map[string]string
+		expectedErrSubstr string
+	}{{
+		name: "no netbox token provided",
+		envvars: map[string]string{
+			"NETBOX_API_URL": "foo",
+		},
+		expectedErrSubstr: flagNetBoxToken,
+	}, {
+		name: "no netbox API URL provided",
+		envvars: map[string]string{
+			"NETBOX_TOKEN": "foo",
+		},
+		expectedErrSubstr: flagNetBoxAPIURL,
+	}, {
+		name: "tag regexp",
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := newRootCommand()
+
+			for key, value := range test.envvars {
+				t.Setenv(key, value)
+			}
+			for key, value := range test.flags {
+				cmd.Flags().Set(key, value)
+			}
+
+			err := cmd.Execute()
+
+			if err == nil {
+				t.Errorf("expected error with validating %s but got a nil error", test.expectedErrSubstr)
+			} else if !strings.Contains(err.Error(), test.expectedErrSubstr) {
+				t.Errorf("expected error referencing %q but got %q", test.expectedErrSubstr, err)
 			}
 		})
 	}
