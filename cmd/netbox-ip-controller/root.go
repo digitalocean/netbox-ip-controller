@@ -177,15 +177,15 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 	cfg.metricsAddr = v.GetString(flagMetricsAddr)
 	cfg.clusterDomain = v.GetString(flagClusterDomain)
 
-	cfg.podTags = stringSlice(v.GetString(flagPodIPTags))
-	cfg.serviceTags = stringSlice(v.GetString(flagServiceIPTags))
+	cfg.podTags = sanitizedStringSlice(v.GetString(flagPodIPTags))
+	cfg.serviceTags = sanitizedStringSlice(v.GetString(flagServiceIPTags))
 
 	cfg.podLabels = make(map[string]bool)
-	for _, l := range stringSlice(v.GetString(flagPodPublishLabels)) {
+	for _, l := range sanitizedStringSlice(v.GetString(flagPodPublishLabels)) {
 		cfg.podLabels[l] = true
 	}
 	cfg.serviceLabels = make(map[string]bool)
-	for _, l := range stringSlice(v.GetString(flagServicePublishLabels)) {
+	for _, l := range sanitizedStringSlice(v.GetString(flagServicePublishLabels)) {
 		cfg.serviceLabels[l] = true
 	}
 
@@ -216,7 +216,7 @@ func (cfg *rootConfig) validate() error {
 // stringSlice splits a comma-separated list of values into a slice of strings
 // NOTE: cannot use viper.GetStringSlice(key) b/c it doesn't parse comma-separated env vars
 // correctly: https://github.com/spf13/viper/issues/380
-func stringSlice(s string) []string {
+func sanitizedStringSlice(s string) []string {
 	if strings.TrimSpace(s) == "" {
 		return nil
 	}
