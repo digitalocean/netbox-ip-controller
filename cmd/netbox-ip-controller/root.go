@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/viper"
 	log "go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -115,7 +116,9 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	}
 
 	cfg.netboxAPIURL = v.GetString(flagNetBoxAPIURL)
+
 	cfg.netboxToken = v.GetString(flagNetBoxToken)
+
 	kubeConfigFile := v.GetString(flagKubeConfig)
 
 	kubeConfig, err := kubeConfig(kubeConfigFile)
@@ -126,6 +129,21 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	cfg.kubeConfig.QPS = float32(v.GetFloat64(flagKubeQPS))
 	cfg.kubeConfig.Burst = v.GetInt(flagKubeBurst)
 
+	err = cfg.validate()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cfg *globalConfig) validate() error {
+	if cfg.netboxAPIURL == "" {
+		return fmt.Errorf("%s was not provided", flagNetBoxAPIURL)
+	}
+	if cfg.netboxToken == "" {
+		return fmt.Errorf("%s was not provided", flagNetBoxToken)
+	}
 	return nil
 }
 
@@ -159,34 +177,69 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 	cfg.metricsAddr = v.GetString(flagMetricsAddr)
 	cfg.clusterDomain = v.GetString(flagClusterDomain)
 
-	cfg.podTags = stringSlice(v.GetString(flagPodIPTags))
-	cfg.serviceTags = stringSlice(v.GetString(flagServiceIPTags))
+	cfg.podTags = sanitizedStringSlice(v.GetString(flagPodIPTags))
+	cfg.serviceTags = sanitizedStringSlice(v.GetString(flagServiceIPTags))
 
 	cfg.podLabels = make(map[string]bool)
-	for _, l := range stringSlice(v.GetString(flagPodPublishLabels)) {
+	for _, l := range sanitizedStringSlice(v.GetString(flagPodPublishLabels)) {
 		cfg.podLabels[l] = true
 	}
 	cfg.serviceLabels = make(map[string]bool)
-	for _, l := range stringSlice(v.GetString(flagServicePublishLabels)) {
+	for _, l := range sanitizedStringSlice(v.GetString(flagServicePublishLabels)) {
 		cfg.serviceLabels[l] = true
 	}
 
+	err := cfg.validate()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cfg *rootConfig) validate() error {
+	for l := range cfg.serviceLabels {
+		err := validateLabel(l)
+		if err != nil {
+			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagServicePublishLabels, l, err)
+		}
+	}
+	for l := range cfg.podLabels {
+		err := validateLabel(l)
+		if err != nil {
+			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagPodPublishLabels, l, err)
+		}
+	}
 	return nil
 }
 
 // stringSlice splits a comma-separated list of values into a slice of strings
 // NOTE: cannot use viper.GetStringSlice(key) b/c it doesn't parse comma-separated env vars
 // correctly: https://github.com/spf13/viper/issues/380
-func stringSlice(s string) []string {
+func sanitizedStringSlice(s string) []string {
 	if strings.TrimSpace(s) == "" {
 		return nil
 	}
 
 	values := strings.Split(s, ",")
-	for i, val := range values {
-		values[i] = strings.TrimSpace(val)
+	var sanitized []string
+	for _, val := range values {
+		trimmed := strings.TrimSpace(val)
+		if trimmed != "" {
+			sanitized = append(sanitized, trimmed)
+		}
 	}
-	return values
+	return sanitized
+}
+
+// validateLabel returns a nil error if s is a valid kubernetes label value,
+// else it returns an error containing the reason(s) it is not valid
+func validateLabel(s string) error {
+	stringErrs := validation.IsQualifiedName(s)
+	if stringErrs != nil {
+		return fmt.Errorf("%v", stringErrs)
+	}
+	return nil
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {

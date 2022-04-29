@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -94,4 +96,140 @@ func TestConfigSetup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGlobalConfigValidation(t *testing.T) {
+	tests := []struct {
+		name              string
+		netboxAPIURL      string
+		netboxToken       string
+		errorExpected     bool
+		expectedErrSubstr string
+	}{{
+		name:              "no netbox token provided",
+		netboxAPIURL:      "foo",
+		errorExpected:     true,
+		expectedErrSubstr: flagNetBoxToken,
+	}, {
+		name:              "no netbox API URL provided",
+		netboxToken:       "foo",
+		errorExpected:     true,
+		expectedErrSubstr: flagNetBoxAPIURL,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := globalConfig{
+				netboxAPIURL: test.netboxAPIURL,
+				netboxToken:  test.netboxToken,
+			}
+
+			err := cfg.validate()
+
+			err = expectError(test.expectedErrSubstr, err)
+			if err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+func TestRootConfigValidation(t *testing.T) {
+	tests := []struct {
+		name              string
+		podLabels         map[string]bool
+		serviceLabels     map[string]bool
+		errorExpected     bool
+		expectedErrSubstr string
+	}{{
+		name: "invalid pod label",
+		podLabels: map[string]bool{
+			"I'm simply a bad label!": true,
+			"butThisIsFine":           true,
+		},
+		errorExpected:     true,
+		expectedErrSubstr: flagPodPublishLabels,
+	}, {
+		name: "invalid service label",
+		serviceLabels: map[string]bool{
+			"_cantStartWithAnUnderscore": true,
+		},
+		errorExpected:     true,
+		expectedErrSubstr: flagServicePublishLabels,
+	}, {
+		name: "valid labels",
+		podLabels: map[string]bool{
+			"my.domain.io/label": true,
+			"1_great_label":      true,
+		},
+		serviceLabels: map[string]bool{
+			"a-better-label": true,
+			"the_best_label": true,
+		},
+		errorExpected: false,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := rootConfig{
+				podLabels:     test.podLabels,
+				serviceLabels: test.serviceLabels,
+			}
+
+			err := cfg.validate()
+
+			if test.errorExpected {
+				err = expectError(test.expectedErrSubstr, err)
+				if err != nil {
+					t.Error(err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected nil error but got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func testSanitizeStringSlices(t *testing.T) {
+	tests := []struct {
+		name         string
+		flags        map[string]string
+		inputTags    string
+		expectedTags []string
+	}{{
+		name:         "no whitespace",
+		inputTags:    "foo,bar,baz,buz",
+		expectedTags: []string{"foo", "bar", "baz", "buz"},
+	}, {
+		name:         "lots of whitespace",
+		inputTags:    " foo, bar \n, baz\t, buz ",
+		expectedTags: []string{"foo", "bar", "baz", "buz"},
+	}, {
+		name:         "errant commas",
+		inputTags:    ",foo,bar,,baz,buz,,",
+		expectedTags: []string{"foo", "bar", "baz", "buz"},
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for i, tag := range sanitizedStringSlice(test.inputTags) {
+				if test.expectedTags[i] != tag {
+					t.Errorf("expected %v but got %v", test.expectedTags, tag)
+				}
+			}
+		})
+	}
+}
+
+// expectError returns nil if the given err is non-nil and contains substr,
+// else it returns an error.
+func expectError(subStr string, err error) error {
+	if err == nil {
+		return fmt.Errorf("expected error with validating %s but got a nil error", subStr)
+	} else if !strings.Contains(err.Error(), subStr) {
+		return fmt.Errorf("expected error referencing %q but got %q", subStr, err)
+	}
+	return nil
 }
