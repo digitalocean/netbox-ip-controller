@@ -98,34 +98,33 @@ func TestConfigSetup(t *testing.T) {
 	}
 }
 
-func TestGlobalConfig(t *testing.T) {
+func TestGlobalConfigValidation(t *testing.T) {
 	tests := []struct {
 		name              string
-		envvars           map[string]string
+		netboxAPIURL      string
+		netboxToken       string
+		errorExpected     bool
 		expectedErrSubstr string
 	}{{
-		name: "no netbox token provided",
-		envvars: map[string]string{
-			"NETBOX_API_URL": "foo",
-		},
+		name:              "no netbox token provided",
+		netboxAPIURL:      "foo",
+		errorExpected:     true,
 		expectedErrSubstr: flagNetBoxToken,
 	}, {
-		name: "no netbox API URL provided",
-		envvars: map[string]string{
-			"NETBOX_TOKEN": "foo",
-		},
+		name:              "no netbox API URL provided",
+		netboxToken:       "foo",
+		errorExpected:     true,
 		expectedErrSubstr: flagNetBoxAPIURL,
 	}}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := newRootCommand()
-
-			for key, value := range test.envvars {
-				t.Setenv(key, value)
+			cfg := globalConfig{
+				netboxAPIURL: test.netboxAPIURL,
+				netboxToken:  test.netboxToken,
 			}
 
-			err := cmd.PersistentPreRunE(cmd, []string{})
+			err := cfg.validate()
 
 			err = expectError(test.expectedErrSubstr, err)
 			if err != nil {
@@ -135,44 +134,49 @@ func TestGlobalConfig(t *testing.T) {
 	}
 }
 
-func TestRootConfig(t *testing.T) {
+func TestRootConfigValidation(t *testing.T) {
 	tests := []struct {
 		name              string
-		flags             map[string]string
+		podLabels         map[string]bool
+		serviceLabels     map[string]bool
 		errorExpected     bool
 		expectedErrSubstr string
 	}{{
 		name: "invalid pod label",
-		flags: map[string]string{
-			flagPodPublishLabels: "I'm simply a bad label!",
+		podLabels: map[string]bool{
+			"I'm simply a bad label!": true,
+			"butThisIsFine":           true,
 		},
 		errorExpected:     true,
 		expectedErrSubstr: flagPodPublishLabels,
 	}, {
 		name: "invalid service label",
-		flags: map[string]string{
-			flagServicePublishLabels: "_cantStartWithAnUnderscore",
+		serviceLabels: map[string]bool{
+			"_cantStartWithAnUnderscore": true,
 		},
 		errorExpected:     true,
 		expectedErrSubstr: flagServicePublishLabels,
 	}, {
 		name: "valid labels",
-		flags: map[string]string{
-			flagPodPublishLabels:     "aGoodLabel",
-			flagServicePublishLabels: "aGreatLabel",
+		podLabels: map[string]bool{
+			"aGoodLabel":    true,
+			"1_great_label": true,
+		},
+		serviceLabels: map[string]bool{
+			"a-better-label": true,
+			"the_best_label": true,
 		},
 		errorExpected: false,
 	}}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := newRootCommand()
-
-			for key, value := range test.flags {
-				cmd.Flags().Set(key, value)
+			cfg := rootConfig{
+				podLabels:     test.podLabels,
+				serviceLabels: test.serviceLabels,
 			}
 
-			err := cmd.PreRunE(cmd, []string{})
+			err := cfg.validate()
 
 			if test.errorExpected {
 				err = expectError(test.expectedErrSubstr, err)

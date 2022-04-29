@@ -116,13 +116,9 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	}
 
 	cfg.netboxAPIURL = v.GetString(flagNetBoxAPIURL)
-	if cfg.netboxAPIURL == "" {
-		return fmt.Errorf("%s was not provided", flagNetBoxAPIURL)
-	}
+
 	cfg.netboxToken = v.GetString(flagNetBoxToken)
-	if cfg.netboxToken == "" {
-		return fmt.Errorf("%s was not provided", flagNetBoxToken)
-	}
+
 	kubeConfigFile := v.GetString(flagKubeConfig)
 
 	kubeConfig, err := kubeConfig(kubeConfigFile)
@@ -133,6 +129,21 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	cfg.kubeConfig.QPS = float32(v.GetFloat64(flagKubeQPS))
 	cfg.kubeConfig.Burst = v.GetInt(flagKubeBurst)
 
+	err = cfg.validate()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cfg *globalConfig) validate() error {
+	if cfg.netboxAPIURL == "" {
+		return fmt.Errorf("%s was not provided", flagNetBoxAPIURL)
+	}
+	if cfg.netboxToken == "" {
+		return fmt.Errorf("%s was not provided", flagNetBoxToken)
+	}
 	return nil
 }
 
@@ -171,21 +182,34 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 
 	cfg.podLabels = make(map[string]bool)
 	for _, l := range stringSlice(v.GetString(flagPodPublishLabels)) {
-		err := validateLabel(l)
-		if err != nil {
-			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagPodPublishLabels, l, err)
-		}
 		cfg.podLabels[l] = true
 	}
 	cfg.serviceLabels = make(map[string]bool)
 	for _, l := range stringSlice(v.GetString(flagServicePublishLabels)) {
+		cfg.serviceLabels[l] = true
+	}
+
+	err := cfg.validate()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cfg *rootConfig) validate() error {
+	for l := range cfg.serviceLabels {
 		err := validateLabel(l)
 		if err != nil {
 			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagServicePublishLabels, l, err)
 		}
-		cfg.serviceLabels[l] = true
 	}
-
+	for l := range cfg.podLabels {
+		err := validateLabel(l)
+		if err != nil {
+			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagPodPublishLabels, l, err)
+		}
+	}
 	return nil
 }
 
