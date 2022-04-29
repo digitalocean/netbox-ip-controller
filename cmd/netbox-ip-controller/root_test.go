@@ -98,11 +98,10 @@ func TestConfigSetup(t *testing.T) {
 	}
 }
 
-func TestRequiredConfiguration(t *testing.T) {
+func TestGlobalConfig(t *testing.T) {
 	tests := []struct {
 		name              string
 		envvars           map[string]string
-		flags             map[string]string
 		expectedErrSubstr string
 	}{{
 		name: "no netbox token provided",
@@ -116,8 +115,6 @@ func TestRequiredConfiguration(t *testing.T) {
 			"NETBOX_TOKEN": "foo",
 		},
 		expectedErrSubstr: flagNetBoxAPIURL,
-	}, {
-		name: "tag regexp",
 	}}
 
 	for _, test := range tests {
@@ -127,16 +124,65 @@ func TestRequiredConfiguration(t *testing.T) {
 			for key, value := range test.envvars {
 				t.Setenv(key, value)
 			}
+
+			err := cmd.PersistentPreRunE(cmd, []string{})
+
+			err = expectError(test.expectedErrSubstr, err)
+			if err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+func TestRootConfig(t *testing.T) {
+	tests := []struct {
+		name              string
+		flags             map[string]string
+		errorExpected     bool
+		expectedErrSubstr string
+	}{{
+		name: "invalid pod label",
+		flags: map[string]string{
+			flagPodPublishLabels: "I'm simply a bad label!",
+		},
+		errorExpected:     true,
+		expectedErrSubstr: flagPodPublishLabels,
+	}, {
+		name: "invalid service label",
+		flags: map[string]string{
+			flagServicePublishLabels: "_cantStartWithAnUnderscore",
+		},
+		errorExpected:     true,
+		expectedErrSubstr: flagServicePublishLabels,
+	}, {
+		name: "valid labels",
+		flags: map[string]string{
+			flagPodPublishLabels:     "aGoodLabel",
+			flagServicePublishLabels: "aGreatLabel",
+		},
+		errorExpected: false,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := newRootCommand()
+
 			for key, value := range test.flags {
 				cmd.Flags().Set(key, value)
 			}
 
-			err := cmd.Execute()
+			err := cmd.PreRunE(cmd, []string{})
 
-			if err == nil {
-				t.Errorf("expected error with validating %s but got a nil error", test.expectedErrSubstr)
-			} else if !strings.Contains(err.Error(), test.expectedErrSubstr) {
-				t.Errorf("expected error referencing %q but got %q", test.expectedErrSubstr, err)
+			if test.errorExpected {
+				err = expectError(test.expectedErrSubstr, err)
+				if err != nil {
+					t.Error(err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected nil error but got %v", err)
+				}
 			}
 		})
 	}
@@ -202,6 +248,19 @@ func TestTagValidation(t *testing.T) {
 	}
 }
 
+// expectError returns nil if the given err is non-nil and contains substr,
+// else it returns an error.
+func expectError(subStr string, err error) error {
+	if err == nil {
+		return fmt.Errorf("expected error with validating %s but got a nil error", subStr)
+	} else if !strings.Contains(err.Error(), subStr) {
+		return fmt.Errorf("expected error referencing %q but got %q", subStr, err)
+	}
+	return nil
+}
+
+// compareTags returns nil if tagType and expected contain the same strings in the
+// same order.
 func compareTags(tagType string, expected []string, actual []string) error {
 	for i, tag := range expected {
 		if actual[i] != tag {

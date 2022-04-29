@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/viper"
 	log "go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -170,10 +171,18 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 
 	cfg.podLabels = make(map[string]bool)
 	for _, l := range stringSlice(v.GetString(flagPodPublishLabels)) {
+		err := validateLabel(l)
+		if err != nil {
+			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagPodPublishLabels, l, err)
+		}
 		cfg.podLabels[l] = true
 	}
 	cfg.serviceLabels = make(map[string]bool)
 	for _, l := range stringSlice(v.GetString(flagServicePublishLabels)) {
+		err := validateLabel(l)
+		if err != nil {
+			return fmt.Errorf("%s value %q is not a valid kubernetes label: %w", flagServicePublishLabels, l, err)
+		}
 		cfg.serviceLabels[l] = true
 	}
 
@@ -197,6 +206,16 @@ func stringSlice(s string) []string {
 		}
 	}
 	return sanitized
+}
+
+// validateLabel returns a nil error if s is a valid kubernetes label value,
+// else it returns an error containing the reason(s) it is not valid
+func validateLabel(s string) error {
+	stringErrs := validation.IsValidLabelValue(s)
+	if stringErrs != nil {
+		return fmt.Errorf("%v", stringErrs)
+	}
+	return nil
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
