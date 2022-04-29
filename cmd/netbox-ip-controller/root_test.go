@@ -192,61 +192,32 @@ func TestRootConfigValidation(t *testing.T) {
 	}
 }
 
-func TestTagValidation(t *testing.T) {
+func testSanitizeStringSlices(t *testing.T) {
 	tests := []struct {
-		name                string
-		flags               map[string]string
-		expectedPodTags     []string
-		expectedServiceTags []string
+		name         string
+		flags        map[string]string
+		inputTags    string
+		expectedTags []string
 	}{{
-		name: "service tags only",
-		flags: map[string]string{
-			flagPodIPTags: " foo,   bar, baz,buz",
-		},
-		expectedPodTags:     []string{"foo", "bar", "baz", "buz"},
-		expectedServiceTags: []string{},
+		name:         "no whitespace",
+		inputTags:    "foo,bar,baz,buz",
+		expectedTags: []string{"foo", "bar", "baz", "buz"},
 	}, {
-		name: "pod tags only",
-		flags: map[string]string{
-			flagServiceIPTags: "foo,bar , baz ,buz",
-		},
-		expectedPodTags:     []string{},
-		expectedServiceTags: []string{"foo", "bar", "baz", "buz"},
+		name:         "lots of whitespace",
+		inputTags:    " foo, bar \n, baz\t, buz ",
+		expectedTags: []string{"foo", "bar", "baz", "buz"},
 	}, {
-		name: "service and pod tags",
-		flags: map[string]string{
-			flagPodIPTags: "foo,bar,baz,buz",
-			flagServiceIPTags: "	foo,bar , baz ,buz",
-		},
-		expectedPodTags:     []string{"foo", "bar", "baz", "buz"},
-		expectedServiceTags: []string{"foo", "bar", "baz", "buz"},
-	}, {
-		name: "errant commas",
-		flags: map[string]string{
-			flagPodIPTags:     ",foo,bar,baz,buz,",
-			flagServiceIPTags: "foo,,bar,baz,buz",
-		},
-		expectedPodTags:     []string{"foo", "bar", "baz", "buz"},
-		expectedServiceTags: []string{"foo", "bar", "baz", "buz"},
+		name:         "errant commas",
+		inputTags:    ",foo,bar,,baz,buz,,",
+		expectedTags: []string{"foo", "bar", "baz", "buz"},
 	}}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := newRootCommand()
-			cfg := rootConfig{}
-
-			for key, value := range test.flags {
-				cmd.Flags().Set(key, value)
-			}
-
-			cfg.setup(cmd)
-
-			err := compareTags(flagPodIPTags, test.expectedPodTags, cfg.podTags)
-			if err != nil {
-				t.Error(err)
-			}
-			err = compareTags(flagServiceIPTags, test.expectedServiceTags, cfg.serviceTags)
-			if err != nil {
-				t.Error(err)
+			for i, tag := range sanitizedStringSlice(test.inputTags) {
+				if test.expectedTags[i] != tag {
+					t.Errorf("expected %v but got %v", test.expectedTags, tag)
+				}
 			}
 		})
 	}
@@ -259,17 +230,6 @@ func expectError(subStr string, err error) error {
 		return fmt.Errorf("expected error with validating %s but got a nil error", subStr)
 	} else if !strings.Contains(err.Error(), subStr) {
 		return fmt.Errorf("expected error referencing %q but got %q", subStr, err)
-	}
-	return nil
-}
-
-// compareTags returns nil if tagType and expected contain the same strings in the
-// same order.
-func compareTags(tagType string, expected []string, actual []string) error {
-	for i, tag := range expected {
-		if actual[i] != tag {
-			return fmt.Errorf("expected %s %v but got %v", tagType, expected, actual)
-		}
 	}
 	return nil
 }
