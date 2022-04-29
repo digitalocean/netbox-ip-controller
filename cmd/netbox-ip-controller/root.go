@@ -235,7 +235,7 @@ func sanitizedStringSlice(s string) []string {
 // validateLabel returns a nil error if s is a valid kubernetes label value,
 // else it returns an error containing the reason(s) it is not valid
 func validateLabel(s string) error {
-	stringErrs := validation.IsValidLabelValue(s)
+	stringErrs := validation.IsQualifiedName(s)
 	if stringErrs != nil {
 		return fmt.Errorf("%v", stringErrs)
 	}

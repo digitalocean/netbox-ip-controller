@@ -159,8 +159,8 @@ func TestRootConfigValidation(t *testing.T) {
 	}, {
 		name: "valid labels",
 		podLabels: map[string]bool{
-			"aGoodLabel":    true,
-			"1_great_label": true,
+			"my.domain.io/label": true,
+			"1_great_label":      true,
 		},
 		serviceLabels: map[string]bool{
 			"a-better-label": true,
