@@ -13,11 +13,13 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	log "go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -42,9 +44,10 @@ type Client interface {
 }
 
 type client struct {
-	httpClient *retryablehttp.Client
-	baseURL    string
-	token      string
+	httpClient  *retryablehttp.Client
+	baseURL     string
+	token       string
+	rateLimiter *rate.Limiter
 }
 
 // NewClient sets up a new NetBox client with default authorization
@@ -56,9 +59,10 @@ func NewClient(apiURL, apiToken string) (Client, error) {
 	}
 
 	return &client{
-		httpClient: retryableHTTPClient(5),
-		baseURL:    strings.TrimSuffix(u.String(), "/"),
-		token:      apiToken,
+		httpClient:  retryableHTTPClient(5),
+		baseURL:     strings.TrimSuffix(u.String(), "/"),
+		token:       apiToken,
+		rateLimiter: rate.NewLimiter(rate.Every(time.Second/100), 10),
 	}, nil
 }
 
@@ -299,6 +303,9 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 	if c.token != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
 	}
+
+	// Block execution until allowed by the rate limiter
+	c.rateLimiter.Wait(ctx)
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
