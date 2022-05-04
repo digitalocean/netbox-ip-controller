@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
 
@@ -50,12 +49,9 @@ type client struct {
 	rateLimiter *rate.Limiter
 }
 
-// ClientOption is a function type for passing options to NewClient
-type ClientOption func(*client)
-
 // NewClient sets up a new NetBox client with default authorization
 // and retries.
-func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
+func NewClient(apiURL, apiToken string, refillRate rate.Limit, bucketSize int) (Client, error) {
 	u, err := parseAndValidateURL(apiURL)
 	if err != nil {
 		return nil, err
@@ -65,22 +61,9 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 		httpClient:  retryableHTTPClient(5),
 		baseURL:     strings.TrimSuffix(u.String(), "/"),
 		token:       apiToken,
-		rateLimiter: rate.NewLimiter(rate.Every(time.Second/100), 10),
+		rateLimiter: rate.NewLimiter(refillRate, bucketSize),
 	}
-
-	for _, opt := range opts {
-		opt(c)
-	}
-
 	return c, nil
-}
-
-// WithRateLimiter is an option that attaches a token bucket rate limiter
-// to the given client.
-func WithRateLimiter(refillRate rate.Limit, bucketSize int) ClientOption {
-	return func(c *client) {
-		c.rateLimiter = rate.NewLimiter(refillRate, bucketSize)
-	}
 }
 
 func parseAndValidateURL(apiURL string) (*url.URL, error) {
