@@ -13,6 +13,7 @@ import (
 	svcctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/service"
 	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
+	"golang.org/x/time/rate"
 
 	"github.com/go-logr/zapr"
 	"github.com/spf13/cobra"
@@ -34,6 +35,9 @@ const (
 	flagKubeConfig           = "kube-config"
 	flagKubeQPS              = "kube-qps"
 	flagKubeBurst            = "kube-burst"
+	flagRateLimitNetBox      = "rate-limit-netbox"
+	flagNetBoxQPS            = "netbox-qps"
+	flagNetBoxBurst          = "netbox-burst"
 	flagPodIPTags            = "pod-ip-tags"
 	flagServiceIPTags        = "service-ip-tags"
 	flagPodPublishLabels     = "pod-publish-labels"
@@ -50,12 +54,15 @@ type globalConfig struct {
 var globalCfg = &globalConfig{}
 
 type rootConfig struct {
-	metricsAddr   string
-	podTags       []string
-	serviceTags   []string
-	podLabels     map[string]bool
-	serviceLabels map[string]bool
-	clusterDomain string
+	metricsAddr     string
+	podTags         []string
+	serviceTags     []string
+	podLabels       map[string]bool
+	serviceLabels   map[string]bool
+	clusterDomain   string
+	rateLimitNetbox bool
+	netboxQPS       rate.Limit
+	netboxBurst     int
 }
 
 func newRootCommand() *cobra.Command {
@@ -93,6 +100,9 @@ func registerGlobalFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String(flagKubeConfig, "", "absolute path to the kubeconfig file specifying the kube-apiserver instance; leave empty if the controller is running in-cluster")
 	cmd.PersistentFlags().Float64(flagKubeQPS, 20.0, "maximum number of requests per second to the kube-apiserver")
 	cmd.PersistentFlags().Int(flagKubeBurst, 30, "maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins")
+	cmd.PersistentFlags().Bool(flagRateLimitNetBox, false, "if true, requests to the NetBox API server will be rate limited using a token bucket method")
+	cmd.PersistentFlags().Float64(flagNetBoxQPS, 100.0, "average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second")
+	cmd.PersistentFlags().Int(flagNetBoxBurst, 10, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
 }
 
 // register flags relevant for the root command itself, but not its children
@@ -180,6 +190,10 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 	cfg.podTags = sanitizedStringSlice(v.GetString(flagPodIPTags))
 	cfg.serviceTags = sanitizedStringSlice(v.GetString(flagServiceIPTags))
 
+	cfg.rateLimitNetbox = v.GetBool(flagRateLimitNetBox)
+	cfg.netboxQPS = rate.Limit(v.GetFloat64(flagNetBoxQPS))
+	cfg.netboxBurst = v.GetInt(flagNetBoxBurst)
+
 	cfg.podLabels = make(map[string]bool)
 	for _, l := range sanitizedStringSlice(v.GetString(flagPodPublishLabels)) {
 		cfg.podLabels[l] = true
@@ -243,6 +257,10 @@ func validateLabel(s string) error {
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
+	var netboxOpts []netbox.ClientOption
+	if cfg.rateLimitNetbox {
+		netboxOpts = append(netboxOpts, netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst))
+	}
 	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken)
 	if err != nil {
 		return err
