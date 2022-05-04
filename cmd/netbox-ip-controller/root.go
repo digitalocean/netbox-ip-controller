@@ -259,7 +259,7 @@ func validateLabel(s string) error {
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
-	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken, globalCfg.netboxQPS, globalCfg.netboxBurst)
+	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken, netbox.WithRateLimter(globalCfg.netboxQPS, globalCfg.netboxBurst))
 	if err != nil {
 		return err
 	}

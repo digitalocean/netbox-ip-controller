@@ -49,23 +49,35 @@ type client struct {
 	rateLimiter *rate.Limiter
 }
 
+// ClientOption is a function type to pass options to NewClient
+type ClientOption func(*client)
+
 // NewClient sets up a new NetBox client with default authorization
 // and retries.
-func NewClient(apiURL, apiToken string, refillRate rate.Limit, bucketSize int) (Client, error) {
+func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	u, err := parseAndValidateURL(apiURL)
 	if err != nil {
 		return nil, err
 	}
 
 	c := &client{
-		httpClient:  retryableHTTPClient(5),
-		baseURL:     strings.TrimSuffix(u.String(), "/"),
-		token:       apiToken,
-		rateLimiter: rate.NewLimiter(refillRate, bucketSize),
+		httpClient: retryableHTTPClient(5),
+		baseURL:    strings.TrimSuffix(u.String(), "/"),
+		token:      apiToken,
 	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	return c, nil
 }
 
+func WithRateLimter(refillRate rate.Limit, bucketSize int) ClientOption {
+	return func(c *client) {
+		c.rateLimiter = rate.NewLimiter(refillRate, bucketSize)
+	}
+}
 func parseAndValidateURL(apiURL string) (*url.URL, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
