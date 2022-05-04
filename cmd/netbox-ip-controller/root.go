@@ -35,7 +35,6 @@ const (
 	flagKubeConfig           = "kube-config"
 	flagKubeQPS              = "kube-qps"
 	flagKubeBurst            = "kube-burst"
-	flagRateLimitNetBox      = "rate-limit-netbox"
 	flagNetBoxQPS            = "netbox-qps"
 	flagNetBoxBurst          = "netbox-burst"
 	flagPodIPTags            = "pod-ip-tags"
@@ -49,6 +48,8 @@ type globalConfig struct {
 	kubeConfig   *rest.Config
 	netboxAPIURL string
 	netboxToken  string
+	netboxQPS    rate.Limit
+	netboxBurst  int
 }
 
 var globalCfg = &globalConfig{}
@@ -61,8 +62,6 @@ type rootConfig struct {
 	serviceLabels   map[string]bool
 	clusterDomain   string
 	rateLimitNetbox bool
-	netboxQPS       rate.Limit
-	netboxBurst     int
 }
 
 func newRootCommand() *cobra.Command {
@@ -100,9 +99,8 @@ func registerGlobalFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String(flagKubeConfig, "", "absolute path to the kubeconfig file specifying the kube-apiserver instance; leave empty if the controller is running in-cluster")
 	cmd.PersistentFlags().Float64(flagKubeQPS, 20.0, "maximum number of requests per second to the kube-apiserver")
 	cmd.PersistentFlags().Int(flagKubeBurst, 30, "maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins")
-	cmd.PersistentFlags().Bool(flagRateLimitNetBox, false, "if true, requests to the NetBox API server will be rate limited using a token bucket method")
 	cmd.PersistentFlags().Float64(flagNetBoxQPS, 100.0, "average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second")
-	cmd.PersistentFlags().Int(flagNetBoxBurst, 10, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
+	cmd.PersistentFlags().Int(flagNetBoxBurst, 1, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
 }
 
 // register flags relevant for the root command itself, but not its children
@@ -138,6 +136,8 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	cfg.kubeConfig = kubeConfig
 	cfg.kubeConfig.QPS = float32(v.GetFloat64(flagKubeQPS))
 	cfg.kubeConfig.Burst = v.GetInt(flagKubeBurst)
+	cfg.netboxQPS = rate.Limit(v.GetFloat64(flagNetBoxQPS))
+	cfg.netboxBurst = v.GetInt(flagNetBoxBurst)
 
 	err = cfg.validate()
 	if err != nil {
@@ -153,6 +153,12 @@ func (cfg *globalConfig) validate() error {
 	}
 	if cfg.netboxToken == "" {
 		return fmt.Errorf("%s was not provided", flagNetBoxToken)
+	}
+	if cfg.netboxQPS <= 0 {
+		return fmt.Errorf("%s value %f is invalid: must be greater than 0", flagNetBoxQPS, cfg.netboxQPS)
+	}
+	if cfg.netboxBurst < 1 {
+		return fmt.Errorf("%s value %d is invalid: must be at least 1", flagNetBoxBurst, cfg.netboxBurst)
 	}
 	return nil
 }
@@ -189,10 +195,6 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 
 	cfg.podTags = sanitizedStringSlice(v.GetString(flagPodIPTags))
 	cfg.serviceTags = sanitizedStringSlice(v.GetString(flagServiceIPTags))
-
-	cfg.rateLimitNetbox = v.GetBool(flagRateLimitNetBox)
-	cfg.netboxQPS = rate.Limit(v.GetFloat64(flagNetBoxQPS))
-	cfg.netboxBurst = v.GetInt(flagNetBoxBurst)
 
 	cfg.podLabels = make(map[string]bool)
 	for _, l := range sanitizedStringSlice(v.GetString(flagPodPublishLabels)) {
@@ -257,11 +259,7 @@ func validateLabel(s string) error {
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
-	var netboxOpts []netbox.ClientOption
-	if cfg.rateLimitNetbox {
-		netboxOpts = append(netboxOpts, netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst))
-	}
-	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken)
+	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken, globalCfg.netboxQPS, globalCfg.netboxBurst)
 	if err != nil {
 		return err
 	}
