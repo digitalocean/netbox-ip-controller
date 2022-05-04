@@ -319,7 +319,10 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 	}
 
 	// Block execution of request until allowed by the rate limiter
-	c.rateLimiter.Wait(ctx)
+	// Return an error if the context is cancelled
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return nil, err
+	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
