@@ -50,20 +50,34 @@ type client struct {
 	rateLimiter *rate.Limiter
 }
 
+type ClientOption func(*client)
+
 // NewClient sets up a new NetBox client with default authorization
 // and retries.
-func NewClient(apiURL, apiToken string) (Client, error) {
+func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	u, err := parseAndValidateURL(apiURL)
 	if err != nil {
 		return nil, err
 	}
 
-	return &client{
+	c := &client{
 		httpClient:  retryableHTTPClient(5),
 		baseURL:     strings.TrimSuffix(u.String(), "/"),
 		token:       apiToken,
 		rateLimiter: rate.NewLimiter(rate.Every(time.Second/100), 10),
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c, nil
+}
+
+func WithRateLimiter(refillRate rate.Limit, bucketSize int) ClientOption {
+	return func(c *client) {
+		c.rateLimiter = rate.NewLimiter(refillRate, bucketSize)
+	}
 }
 
 func parseAndValidateURL(apiURL string) (*url.URL, error) {
@@ -304,7 +318,7 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 		req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
 	}
 
-	// Block execution until allowed by the rate limiter
+	// Block execution of request until allowed by the rate limiter
 	c.rateLimiter.Wait(ctx)
 
 	res, err := c.httpClient.Do(req)
