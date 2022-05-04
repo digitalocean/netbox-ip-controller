@@ -13,12 +13,12 @@ import (
 	svcctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/service"
 	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
-	"golang.org/x/time/rate"
 
 	"github.com/go-logr/zapr"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	log "go.uber.org/zap"
+	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
