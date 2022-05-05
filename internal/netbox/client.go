@@ -75,7 +75,7 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 
 // WithRateLimiter is a functional option that attaches a token bucket style rate limiter
 // to the given client.
-func WithRateLimter(refillRate rate.Limit, bucketSize int) ClientOption {
+func WithRateLimiter(refillRate rate.Limit, bucketSize int) ClientOption {
 	return func(c *client) {
 		c.rateLimiter = rate.NewLimiter(refillRate, bucketSize)
 	}
