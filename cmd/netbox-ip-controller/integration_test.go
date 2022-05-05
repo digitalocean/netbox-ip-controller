@@ -55,10 +55,10 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.L().Fatal("failed to start test env", log.Error(err))
 	}
+	defer env.Stop()
 
 	exitCode := m.Run()
 
-	env.Stop()
 	cancel()
 
 	os.Exit(exitCode)
