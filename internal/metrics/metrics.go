@@ -6,7 +6,7 @@ import (
 	kubemetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-// Init registers all internal metrics to the given prometheus registry
+// RegisterCustomMetrics registers all metrics in this package to the given prometheus registry
 func RegisterCustomMetrics() {
 	kubemetrics.Registry.MustRegister(netboxTotalRequests)
 }
@@ -19,6 +19,6 @@ var (
 )
 
 // IncremementNetboxTotalRequests increments the netbox_total_requests metric
-func IncrementNetboxTotalRequests() {
+func IncrementNetboxRequestsTotal() {
 	netboxTotalRequests.Inc()
 }
