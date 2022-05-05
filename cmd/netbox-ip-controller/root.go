@@ -12,6 +12,7 @@ import (
 	podctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/pod"
 	svcctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/service"
 	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
+	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	"github.com/go-logr/zapr"
@@ -25,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	kubemetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 const (
@@ -273,6 +275,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
 	}
+	metrics.Init(&kubemetrics.Registry)
 	log.L().Info("created manager")
 
 	controllers := make(map[string]ctrl.Controller)
