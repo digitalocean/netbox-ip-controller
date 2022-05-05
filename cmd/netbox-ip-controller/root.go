@@ -26,7 +26,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-	kubemetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 const (
@@ -275,7 +274,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
 	}
-	metrics.Init(&kubemetrics.Registry)
+	metrics.RegisterCustomMetrics()
 	log.L().Info("created manager")
 
 	controllers := make(map[string]ctrl.Controller)

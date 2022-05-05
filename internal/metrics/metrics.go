@@ -7,8 +7,8 @@ import (
 )
 
 // Init registers all internal metrics to the given prometheus registry
-func Init(r *kubemetrics.RegistererGatherer) {
-	(*r).MustRegister(netboxTotalRequests)
+func RegisterCustomMetrics() {
+	kubemetrics.Registry.MustRegister(netboxTotalRequests)
 }
 
 var (
