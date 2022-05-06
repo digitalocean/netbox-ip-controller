@@ -47,21 +47,21 @@ var (
 func TestMain(m *testing.M) {
 	// need to have -v flag parsed before setting up envtest
 	flag.Parse()
+	exitCode := execute(m)
+	os.Exit(exitCode)
+}
 
+// Execute wraps m.Run() and env.Stop() to guarentee that the kubernetes
+// control plane is stopped before exiting
+func execute(m *testing.M) int {
 	// start a test cluster with envtest
-	ctx, cancel := context.WithCancel(context.Background())
 	var err error
-	env, err = newTestEnv(ctx)
+	env, err = newTestEnv()
 	if err != nil {
 		log.L().Fatal("failed to start test env", log.Error(err))
 	}
-
-	exitCode := m.Run()
-
-	env.Stop()
-	cancel()
-
-	os.Exit(exitCode)
+	defer env.Stop()
+	return m.Run()
 }
 
 // TODO(dasha): look into using kind for testing.
@@ -491,13 +491,12 @@ func (env *testEnv) Stop() error {
 	if env.stop == nil {
 		return nil
 	}
-
 	return env.stop()
 }
 
 // newTestEnv creates a new testEnv value. Callers are expected to call its
 // Stop method.
-func newTestEnv(ctx context.Context) (*testEnv, error) {
+func newTestEnv() (*testEnv, error) {
 	env := envtest.Environment{
 		CRDInstallOptions: envtest.CRDInstallOptions{
 			CleanUpAfterUse: true,
