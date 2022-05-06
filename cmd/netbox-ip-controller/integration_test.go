@@ -493,7 +493,6 @@ type testEnv struct {
 
 // Stop stops the control plane.
 func (env *testEnv) Stop() error {
-	fmt.Println("stopping kubernetes control plane")
 	if env.stop == nil {
 		return nil
 	}
