@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"runtime/debug"
 	"testing"
 	"time"
 
@@ -60,6 +61,7 @@ func execute(m *testing.M) int {
 	if err != nil {
 		log.L().Fatal("failed to start test env", log.Error(err))
 	}
+	fmt.Println("starting kubernetes control plane environment")
 	defer env.Stop()
 	return m.Run()
 }
@@ -155,7 +157,7 @@ func TestPod(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	env.startController(ctx)
+	env.startController(ctx, t)
 
 	env.WithNamespace(namespace, t, testFunc)
 }
@@ -236,7 +238,7 @@ func TestService(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	env.startController(ctx)
+	env.startController(ctx, t)
 
 	env.WithNamespace(namespace, t, testFunc)
 }
@@ -318,7 +320,7 @@ func TestNetBoxIP(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	env.startController(ctx)
+	env.startController(ctx, t)
 
 	env.WithNamespace(namespace, t, testFunc)
 }
@@ -366,7 +368,7 @@ func TestClean(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	env.startController(ctx)
+	env.startController(ctx, t)
 	env.WithNamespace(namespace, t, createIPs)
 	cancel()
 
@@ -488,6 +490,7 @@ type testEnv struct {
 
 // Stop stops the control plane.
 func (env *testEnv) Stop() error {
+	fmt.Println("stopping kubernetes control plane environment")
 	if env.stop == nil {
 		return nil
 	}
@@ -552,7 +555,7 @@ func newTestEnv() (*testEnv, error) {
 	}, nil
 }
 
-func (env *testEnv) startController(ctx context.Context) {
+func (env *testEnv) startController(ctx context.Context, t *testing.T) {
 	globalCfg := &globalConfig{
 		netboxAPIURL: netboxAPIURL,
 		netboxToken:  netboxToken,
@@ -566,6 +569,17 @@ func (env *testEnv) startController(ctx context.Context) {
 		clusterDomain: "cluster.local",
 	}
 	go func() {
+		// If this goroutine panicks, the `defer env.Stop()` call in execute() will not
+		// resolve, so we must shut down the control plane and fail the test here.
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("panic: %v\n", r)
+				debug.PrintStack()
+				env.Stop()
+				t.Fatal("goroutine panicked, exiting")
+				os.Exit(1)
+			}
+		}()
 		if err := run(ctx, globalCfg, cfg); err != nil && err != context.Canceled {
 			log.L().Error("netbox-ip-controller stopped running", log.Error(err))
 		}
