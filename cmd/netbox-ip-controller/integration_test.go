@@ -55,13 +55,18 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.L().Fatal("failed to start test env", log.Error(err))
 	}
-	defer env.Stop()
 
-	exitCode := m.Run()
-
+	exitCode := Execute(env, m)
 	cancel()
 
 	os.Exit(exitCode)
+}
+
+// Execute wraps m.Run() and env.Stop() to guarentee that the kubernetes
+// control plane is stopped before exiting
+func Execute(env *testEnv, m *testing.M) int {
+	defer env.Stop()
+	return m.Run()
 }
 
 // TODO(dasha): look into using kind for testing.
