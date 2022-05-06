@@ -47,21 +47,19 @@ var (
 func TestMain(m *testing.M) {
 	// need to have -v flag parsed before setting up envtest
 	flag.Parse()
-
-	// start a test cluster with envtest
-	env, err := newTestEnv()
-	if err != nil {
-		log.L().Fatal("failed to start test env", log.Error(err))
-	}
-
-	exitCode := Execute(env, m)
-
+	exitCode := execute(m)
 	os.Exit(exitCode)
 }
 
 // Execute wraps m.Run() and env.Stop() to guarentee that the kubernetes
 // control plane is stopped before exiting
-func Execute(env *testEnv, m *testing.M) int {
+func execute(m *testing.M) int {
+	// start a test cluster with envtest
+	var err error
+	env, err = newTestEnv()
+	if err != nil {
+		log.L().Fatal("failed to start test env", log.Error(err))
+	}
 	defer env.Stop()
 	return m.Run()
 }
