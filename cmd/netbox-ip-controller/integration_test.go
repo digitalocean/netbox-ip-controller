@@ -49,15 +49,12 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// start a test cluster with envtest
-	ctx, cancel := context.WithCancel(context.Background())
-	var err error
-	env, err = newTestEnv(ctx)
+	env, err := newTestEnv()
 	if err != nil {
 		log.L().Fatal("failed to start test env", log.Error(err))
 	}
 
 	exitCode := Execute(env, m)
-	cancel()
 
 	os.Exit(exitCode)
 }
@@ -501,7 +498,7 @@ func (env *testEnv) Stop() error {
 
 // newTestEnv creates a new testEnv value. Callers are expected to call its
 // Stop method.
-func newTestEnv(ctx context.Context) (*testEnv, error) {
+func newTestEnv() (*testEnv, error) {
 	env := envtest.Environment{
 		CRDInstallOptions: envtest.CRDInstallOptions{
 			CleanUpAfterUse: true,
