@@ -7,7 +7,7 @@ import (
 )
 
 // RegisterCustomMetrics registers all metrics in this package to the given prometheus registry
-func RegisterCustomMetrics() {
+func init() {
 	kubemetrics.Registry.MustRegister(netboxTotalRequests)
 }
 

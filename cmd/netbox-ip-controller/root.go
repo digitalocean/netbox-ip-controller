@@ -12,7 +12,6 @@ import (
 	podctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/pod"
 	svcctrl "github.com/digitalocean/netbox-ip-controller/internal/controller/service"
 	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
-	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	"github.com/go-logr/zapr"
@@ -274,7 +273,6 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
 	}
-	metrics.RegisterCustomMetrics()
 	log.L().Info("created manager")
 
 	controllers := make(map[string]ctrl.Controller)
