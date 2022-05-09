@@ -70,6 +70,10 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 		opt(c)
 	}
 
+	if c.rateLimiter == nil {
+		c.rateLimiter = rate.NewLimiter(rate.Inf, 10000)
+	}
+
 	return c, nil
 }
 
@@ -318,8 +322,6 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 		req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
 	}
 
-	// Block execution of request until allowed by the rate limiter
-	// Return an error if the context is cancelled
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
