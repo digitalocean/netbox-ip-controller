@@ -14,6 +14,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
+
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	log "go.uber.org/zap"
 )
@@ -303,6 +305,8 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	metrics.IncrementNetboxRequestsTotal()
 
 	if err := httpErrorFrom(res); err != nil {
 		return nil, err
