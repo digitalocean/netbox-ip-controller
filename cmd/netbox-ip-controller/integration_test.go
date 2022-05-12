@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net/netip"
 	"os"
 	"runtime/debug"
@@ -22,7 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	log "go.uber.org/zap"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,6 +45,7 @@ var (
 		Factor:   1,
 		Steps:    20,
 	}
+	logger = zap.L()
 )
 
 func TestMain(m *testing.M) {
@@ -56,13 +58,17 @@ func TestMain(m *testing.M) {
 // Execute wraps m.Run() and env.Stop() to guarentee that the kubernetes
 // control plane is stopped before exiting
 func execute(m *testing.M) int {
-	// start a test cluster with envtest
 	var err error
+	logger, err = zap.NewDevelopment()
+	if err != nil {
+		log.Fatal("failed to initialize logger", err)
+	}
+	// start a test cluster with envtest
 	env, err = newTestEnv()
 	if err != nil {
-		log.L().Fatal("failed to start test env", log.Error(err))
+		logger.Fatal("failed to start test env", zap.Error(err))
 	}
-	fmt.Println("starting kubernetes control plane environment")
+	logger.Info("starting kubernetes control plane environment")
 	defer env.Stop()
 	return m.Run()
 }
@@ -380,6 +386,7 @@ func TestClean(t *testing.T) {
 		kubeConfig:   env.KubeConfig,
 		netboxQPS:    rate.Inf,
 		netboxBurst:  1,
+		logger:       logger,
 	}
 	ctx = context.Background()
 	if err := clean(ctx, cfg); err != nil {
@@ -565,6 +572,7 @@ func (env *testEnv) startController(ctx context.Context, t *testing.T) {
 		kubeConfig:   env.KubeConfig,
 		netboxQPS:    rate.Inf,
 		netboxBurst:  1,
+		logger:       logger,
 	}
 	cfg := &rootConfig{
 		podTags:       []string{"kubernetes", "k8s-pod"},
@@ -586,7 +594,7 @@ func (env *testEnv) startController(ctx context.Context, t *testing.T) {
 			}
 		}()
 		if err := run(ctx, globalCfg, cfg); err != nil && err != context.Canceled {
-			log.L().Error("netbox-ip-controller stopped running", log.Error(err))
+			logger.Error("netbox-ip-controller stopped running", zap.Error(err))
 		}
 	}()
 }
