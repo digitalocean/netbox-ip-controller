@@ -34,12 +34,17 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 		}
 	}
 
+	logger := log.L()
+	if s.Logger != nil {
+		logger = s.Logger
+	}
+
 	return &controller{
 		reconciler: &reconciler{
 			tags:          s.Tags,
 			labels:        s.Labels,
 			clusterDomain: s.ClusterDomain,
-			log:           log.L().With(log.String("reconciler", "service")),
+			log:           logger.With(log.String("reconciler", "service")),
 		},
 	}, nil
 }

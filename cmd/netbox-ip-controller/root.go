@@ -42,6 +42,7 @@ const (
 	flagPodPublishLabels     = "pod-publish-labels"
 	flagServicePublishLabels = "service-publish-labels"
 	flagClusterDomain        = "cluster-domain"
+	flagDebug                = "debug"
 )
 
 type globalConfig struct {
@@ -50,6 +51,7 @@ type globalConfig struct {
 	netboxToken  string
 	netboxQPS    rate.Limit
 	netboxBurst  int
+	logger       *log.Logger
 }
 
 var globalCfg = &globalConfig{}
@@ -101,6 +103,7 @@ func registerGlobalFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int(flagKubeBurst, 30, "maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins")
 	cmd.PersistentFlags().Float64(flagNetBoxQPS, 100.0, "average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second")
 	cmd.PersistentFlags().Int(flagNetBoxBurst, 1, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
+	cmd.PersistentFlags().Bool(flagDebug, false, "turn on debug logging")
 }
 
 // register flags relevant for the root command itself, but not its children
@@ -143,6 +146,15 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+
+	logger, err := log.NewProduction()
+	if v.GetBool(flagDebug) {
+		logger, err = log.NewDevelopment()
+	}
+	if err != nil {
+		return fmt.Errorf("cannot initialize logger: %w", err)
+	}
+	cfg.logger = logger
 
 	return nil
 }
@@ -259,10 +271,13 @@ func validateLabel(s string) error {
 }
 
 func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
-	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken, netbox.WithRateLimiter(globalCfg.netboxQPS, globalCfg.netboxBurst))
-	if err != nil {
-		return err
-	}
+	logger := globalCfg.logger
+	defer logger.Sync()
+
+	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken,
+		netbox.WithRateLimiter(globalCfg.netboxQPS, globalCfg.netboxBurst),
+		netbox.WithLogger(logger),
+	)
 
 	crdClient, err := crdregistration.NewClient(globalCfg.kubeConfig)
 	if err != nil {
@@ -283,13 +298,13 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 
 	mgr, err := manager.New(globalCfg.kubeConfig, manager.Options{
 		Scheme:             scheme,
-		Logger:             zapr.NewLogger(log.L().Named("netbox-ip-controller")),
+		Logger:             zapr.NewLogger(logger.Named("netbox-ip-controller")),
 		MetricsBindAddress: cfg.metricsAddr,
 	})
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
 	}
-	log.L().Info("created manager")
+	logger.Info("created manager")
 
 	controllers := make(map[string]ctrl.Controller)
 
@@ -300,6 +315,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	controllers["netboxip"] = netboxController
 
 	podController, err := podctrl.New(
+		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.podTags, netboxClient),
 		ctrl.WithLabels(cfg.podLabels),
 	)
@@ -309,6 +325,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	controllers["pod"] = podController
 
 	svcController, err := svcctrl.New(
+		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.serviceTags, netboxClient),
 		ctrl.WithLabels(cfg.serviceLabels),
 		ctrl.WithClusterDomain(cfg.clusterDomain),

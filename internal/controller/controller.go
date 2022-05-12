@@ -24,10 +24,19 @@ type Settings struct {
 	Tags          []netbox.Tag
 	Labels        map[string]bool
 	ClusterDomain string
+	Logger        *log.Logger
 }
 
 // Option can be used to tune controller settings.
 type Option func(*Settings) error
+
+// WithLogger sets the logger to be used by the controller.
+func WithLogger(logger *log.Logger) Option {
+	return func(s *Settings) error {
+		s.Logger = logger
+		return nil
+	}
+}
 
 // WithTags sets the tags that are applied to every IP
 // published by the controller.
@@ -47,6 +56,9 @@ func WithTags(tags []string, netboxClient netbox.Client) Option {
 			}
 
 			ll := log.L().With(log.String("tag", tag))
+			if s.Logger != nil {
+				ll = s.Logger.With(log.String("tag", tag))
+			}
 
 			if existingTag != nil {
 				ll.Info("tag already exists")

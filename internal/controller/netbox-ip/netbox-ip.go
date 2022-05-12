@@ -39,10 +39,15 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 		return nil, fmt.Errorf("upserting UID field: %w", err)
 	}
 
+	logger := log.L()
+	if s.Logger != nil {
+		logger = s.Logger
+	}
+
 	return &controller{
 		reconciler: &reconciler{
 			netboxClient: s.NetBoxClient,
-			log:          log.L().With(log.String("reconciler", "netboxip")),
+			log:          logger.With(log.String("reconciler", "netboxip")),
 		},
 	}, nil
 }
@@ -77,7 +82,7 @@ func (r *reconciler) InjectClient(c client.Client) error {
 // Reconcile is called on every event that the given reconciler is watching,
 // it updates pod IPs according to the pod changes.
 func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	ll := log.L().With(
+	ll := r.log.With(
 		log.String("namespace", req.Namespace),
 		log.String("name", req.Name),
 	)
