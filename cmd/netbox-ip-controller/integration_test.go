@@ -6,18 +6,18 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net/netip"
 	"os"
-	"runtime/debug"
 	"testing"
 	"time"
 
+	netboxipctrl "github.com/digitalocean/netbox-ip-controller"
 	crd "github.com/digitalocean/netbox-ip-controller/api/netbox"
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	crdclient "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned"
+	"github.com/digitalocean/netbox-ip-controller/internal/crdregistration"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 	"golang.org/x/time/rate"
 
@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,6 @@ var (
 	netboxAPIURL = "http://netbox:8080/api"
 	netboxToken  = "48c7ba92-0f82-443a-8cf3-981559ff32cf"
 	serviceCIDR  = "192.168.0.0/24"
-	env          *testEnv
 	backoff1min  = wait.Backoff{
 		Duration: 3 * time.Second,
 		Factor:   1,
@@ -49,36 +49,40 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	// need to have -v flag parsed before setting up envtest
-	flag.Parse()
-	exitCode := execute(m)
-	os.Exit(exitCode)
-}
-
-// Execute wraps m.Run() and env.Stop() to guarentee that the kubernetes
-// control plane is stopped before exiting
-func execute(m *testing.M) int {
 	var err error
 	logger, err = zap.NewDevelopment()
 	if err != nil {
 		log.Fatal("failed to initialize logger", err)
 	}
-	// start a test cluster with envtest
-	env, err = newTestEnv()
+	defer logger.Sync()
+	exitCode := m.Run()
+	os.Exit(exitCode)
+}
+
+func TestController(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	env, err := newTestEnvWithController(ctx, t)
+	defer env.Stop()
 	if err != nil {
 		logger.Fatal("failed to start test env", zap.Error(err))
 	}
-	logger.Info("starting kubernetes control plane environment")
-	defer env.Stop()
-	return m.Run()
+
+	tests := map[string]func(t *testing.T, env *testEnv){
+		"TestPod":      testPod,
+		"TestService":  testService,
+		"TestNetBoxIP": testNetBoxIP,
+	}
+
+	for name, testFunc := range tests {
+		t.Run(name, func(t *testing.T) {
+			testFunc(t, env)
+		})
+	}
 }
 
-// TODO(dasha): look into using kind for testing.
-// Current envtest setup, does not include kube-controller-manager,
-// so, while pods, services etc. can be created, they are not
-// reconciled.
-
-func TestPod(t *testing.T) {
+func testPod(t *testing.T, env *testEnv) {
 	namespace := "testpod"
 
 	testFunc := func() {
@@ -162,14 +166,10 @@ func TestPod(t *testing.T) {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env.startController(ctx, t)
-
 	env.WithNamespace(namespace, t, testFunc)
 }
 
-func TestService(t *testing.T) {
+func testService(t *testing.T, env *testEnv) {
 	namespace := "testservice"
 
 	testFunc := func() {
@@ -243,14 +243,10 @@ func TestService(t *testing.T) {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env.startController(ctx, t)
-
 	env.WithNamespace(namespace, t, testFunc)
 }
 
-func TestNetBoxIP(t *testing.T) {
+func testNetBoxIP(t *testing.T, env *testEnv) {
 	namespace := "testnetboxip"
 
 	testFunc := func() {
@@ -325,61 +321,66 @@ func TestNetBoxIP(t *testing.T) {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	env.startController(ctx, t)
-
 	env.WithNamespace(namespace, t, testFunc)
 }
 
 func TestClean(t *testing.T) {
-	namespace := "testclean"
-	var uids []netbox.UID
-	createIPs := func() {
-		for i := uint8(1); i < 3; i++ {
-			addr := netip.AddrFrom4([4]byte{192, 168, 0, i})
-			name := fmt.Sprintf("foo-%d", i)
-
-			ip := &v1beta1.NetBoxIP{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "NetBoxIP",
-					APIVersion: "v1beta1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-				},
-				Spec: v1beta1.NetBoxIPSpec{
-					Address: addr,
-					DNSName: name,
-				},
-			}
-
-			var err error
-			ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(namespace).Create(context.Background(), ip, metav1.CreateOptions{})
-			if err != nil {
-				t.Fatalf("creating netboxip: %q\n", err)
-			}
-
-			uids = append(uids, netbox.UID(ip.UID))
-			expectedIPInNetBox := &netbox.IPAddress{
-				UID:     netbox.UID(ip.UID),
-				Address: netbox.IP(addr),
-				DNSName: name,
-			}
-
-			if _, err := env.WaitForIP(expectedIPInNetBox); err != nil {
-				t.Fatal(err)
-			}
-		}
+	env, err := newTestEnv()
+	defer env.Stop()
+	if err != nil {
+		logger.Fatal("failed to start test env", zap.Error(err))
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	env.startController(ctx, t)
-	env.WithNamespace(namespace, t, createIPs)
-	cancel()
+	// create IPs to be cleaned up
+	crdClient, err := crdregistration.NewClient(env.KubeConfig)
+	if err != nil {
+		t.Fatalf("creating registration client: %s", err)
+	}
 
-	// cleanup after stopping controller
+	if err := crdClient.Register(context.Background(), crd.NetBoxIPCRD); err != nil {
+		t.Fatalf("registering CRD: %s", err)
+	}
+
+	var uids []netbox.UID
+	for i := uint8(1); i < 3; i++ {
+		addr := netip.AddrFrom4([4]byte{192, 168, 0, i})
+		name := fmt.Sprintf("foo-%d", i)
+
+		ip := &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: "v1beta1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       name,
+				Namespace:  v1.NamespaceDefault,
+				Finalizers: []string{netboxipctrl.IPFinalizer},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: addr,
+				DNSName: name,
+			},
+		}
+
+		var err error
+		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(v1.NamespaceDefault).Create(context.Background(), ip, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("creating netboxip: %q\n", err)
+		}
+
+		_, err = env.NetboxClient.UpsertIP(context.Background(), &netbox.IPAddress{
+			UID:     netbox.UID(ip.UID),
+			DNSName: name,
+			Address: netbox.IP(addr),
+		})
+		if err != nil {
+			t.Fatalf("pushing IP to NetBox")
+		}
+
+		uids = append(uids, netbox.UID(ip.UID))
+	}
+
+	// cleanup
 	cfg := &globalConfig{
 		netboxAPIURL: netboxAPIURL,
 		netboxToken:  netboxToken,
@@ -388,7 +389,7 @@ func TestClean(t *testing.T) {
 		netboxBurst:  1,
 		logger:       logger,
 	}
-	ctx = context.Background()
+	ctx := context.Background()
 	if err := clean(ctx, cfg); err != nil {
 		t.Error(err)
 	}
@@ -565,7 +566,12 @@ func newTestEnv() (*testEnv, error) {
 	}, nil
 }
 
-func (env *testEnv) startController(ctx context.Context, t *testing.T) {
+func newTestEnvWithController(ctx context.Context, t *testing.T) (*testEnv, error) {
+	env, err := newTestEnv()
+	if err != nil {
+		return nil, err
+	}
+
 	globalCfg := &globalConfig{
 		netboxAPIURL: netboxAPIURL,
 		netboxToken:  netboxToken,
@@ -582,19 +588,11 @@ func (env *testEnv) startController(ctx context.Context, t *testing.T) {
 		clusterDomain: "cluster.local",
 	}
 	go func() {
-		// If this goroutine panicks, the `defer env.Stop()` call in execute() will not
-		// resolve, so we must shut down the control plane and fail the test here.
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Printf("panic: %v\n", r)
-				debug.PrintStack()
-				env.Stop()
-				t.Fatal("goroutine panicked, exiting")
-				os.Exit(1)
-			}
-		}()
+		defer env.Stop()
 		if err := run(ctx, globalCfg, cfg); err != nil && err != context.Canceled {
 			logger.Error("netbox-ip-controller stopped running", zap.Error(err))
 		}
 	}()
+
+	return env, nil
 }
