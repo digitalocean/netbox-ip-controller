@@ -71,7 +71,7 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	}
 
 	if c.rateLimiter == nil {
-		c.rateLimiter = rate.NewLimiter(rate.Inf, 10000)
+		c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
 	}
 
 	return c, nil
