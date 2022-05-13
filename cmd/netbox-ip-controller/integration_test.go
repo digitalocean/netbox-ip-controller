@@ -18,6 +18,7 @@ import (
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	crdclient "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
+	"golang.org/x/time/rate"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -377,6 +378,8 @@ func TestClean(t *testing.T) {
 		netboxAPIURL: netboxAPIURL,
 		netboxToken:  netboxToken,
 		kubeConfig:   env.KubeConfig,
+		netboxQPS:    rate.Inf,
+		netboxBurst:  1,
 	}
 	ctx = context.Background()
 	if err := clean(ctx, cfg); err != nil {
@@ -560,6 +563,8 @@ func (env *testEnv) startController(ctx context.Context, t *testing.T) {
 		netboxAPIURL: netboxAPIURL,
 		netboxToken:  netboxToken,
 		kubeConfig:   env.KubeConfig,
+		netboxQPS:    rate.Inf,
+		netboxBurst:  1,
 	}
 	cfg := &rootConfig{
 		podTags:       []string{"kubernetes", "k8s-pod"},

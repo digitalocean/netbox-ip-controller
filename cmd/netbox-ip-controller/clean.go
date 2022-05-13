@@ -44,7 +44,7 @@ func clean(ctx context.Context, cfg *globalConfig) error {
 		return fmt.Errorf("creating k8s client: %w", err)
 	}
 
-	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken)
+	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken, netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst))
 	if err != nil {
 		return fmt.Errorf("creating netbox client: %w", err)
 	}

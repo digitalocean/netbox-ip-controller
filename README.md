@@ -18,6 +18,8 @@ with dashes (`-`) replaced with underscores (`_`).
 `kube-config` | | Path to the kubeconfig file containing the address of the kube-apiserver to connect to and authentication info. The cluster you want the controller to connect to should be set as current context in the kubeconfig. Leave empty if the controller is running in-cluster. Optional.
 `kube-qps` | `20` | Maximum number of requests per second to the kube-apiserver. Optional.
 `kube-burst` | `30` | Maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins. Optional.
+`netbox-qps` | `100` | Average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second
+`netbox-burst` | `1` | Maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size
 `metrics-addr` | `:8001` | Sets the address to serve metrics on. Optional.
 `cluster-domain` | `cluster.local` | Domain name of the cluster. Optional.
 `pod-ip-tags` | `kubernetes,k8s-pod` | Comma-separated list of tags to add to pod IPs in NetBox. Any tags that don't yet exist will be created. Optional.

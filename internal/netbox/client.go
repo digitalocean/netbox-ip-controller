@@ -18,6 +18,7 @@ import (
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	log "go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -42,26 +43,47 @@ type Client interface {
 }
 
 type client struct {
-	httpClient *retryablehttp.Client
-	baseURL    string
-	token      string
+	httpClient  *retryablehttp.Client
+	baseURL     string
+	token       string
+	rateLimiter *rate.Limiter
 }
+
+// ClientOption is a function type to pass options to NewClient
+type ClientOption func(*client)
 
 // NewClient sets up a new NetBox client with default authorization
 // and retries.
-func NewClient(apiURL, apiToken string) (Client, error) {
+func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	u, err := parseAndValidateURL(apiURL)
 	if err != nil {
 		return nil, err
 	}
 
-	return &client{
+	c := &client{
 		httpClient: retryableHTTPClient(5),
 		baseURL:    strings.TrimSuffix(u.String(), "/"),
 		token:      apiToken,
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	if c.rateLimiter == nil {
+		c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
+	}
+
+	return c, nil
 }
 
+// WithRateLimiter is a functional option that attaches a token bucket style rate limiter
+// to the given client.
+func WithRateLimiter(refillRate rate.Limit, bucketSize int) ClientOption {
+	return func(c *client) {
+		c.rateLimiter = rate.NewLimiter(refillRate, bucketSize)
+	}
+}
 func parseAndValidateURL(apiURL string) (*url.URL, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
@@ -298,6 +320,10 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 	}
 	if c.token != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
+	}
+
+	if err := c.rateLimiter.Wait(ctx); err != nil {
+		return nil, err
 	}
 
 	res, err := c.httpClient.Do(req)
