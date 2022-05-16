@@ -107,7 +107,11 @@ func WithCARootCert(path string) ClientOption {
 	return func(c *client) error {
 		cert, err := ioutil.ReadFile(path)
 		if err != nil {
-			log.L().Error(err.Error())
+			if c.logger != nil {
+				c.logger.Error(err.Error())
+			} else {
+				log.L().Error(err.Error())
+			}
 			return err
 		}
 		certPool := x509.NewCertPool()
