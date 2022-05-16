@@ -106,7 +106,7 @@ func registerGlobalFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().Float64(flagNetBoxQPS, 100.0, "average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second")
 	cmd.PersistentFlags().Int(flagNetBoxBurst, 1, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
 	cmd.PersistentFlags().Bool(flagDebug, false, "turn on debug logging")
-	cmd.PersistentFlags().String(flagNetboxCACertPath, "", "absolute path to a file containing a PEM-encoded root certificate to verify certificates signed by Netbox's CA")
+	cmd.PersistentFlags().String(flagNetboxCACertPath, "", "absolute path to a file containing a PEM-encoded root certificate to verify NetBox server's certificate")
 }
 
 // register flags relevant for the root command itself, but not its children
