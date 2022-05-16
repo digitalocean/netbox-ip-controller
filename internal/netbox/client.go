@@ -5,6 +5,8 @@ package netbox
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
 
+	"github.com/hashicorp/go-cleanhttp"
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	log "go.uber.org/zap"
 	"golang.org/x/time/rate"
@@ -50,8 +53,8 @@ type client struct {
 	logger      *log.Logger
 }
 
-// ClientOption is a function type to pass options to NewClient.
-type ClientOption func(*client)
+// ClientOption is a function type to pass options to NewClient
+type ClientOption func(*client) error
 
 // NewClient sets up a new NetBox client with default authorization
 // and retries.
@@ -69,7 +72,10 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	}
 
 	for _, opt := range opts {
-		opt(c)
+		err := opt(c)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if c.rateLimiter == nil {
@@ -81,18 +87,45 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 
 // WithLogger sets the logger to be used by the client.
 func WithLogger(logger *log.Logger) ClientOption {
-	return func(c *client) {
+	return func(c *client) error {
 		c.logger = logger
+		return nil
 	}
 }
 
 // WithRateLimiter is a functional option that attaches a token bucket style rate limiter
 // to the given client.
 func WithRateLimiter(refillRate rate.Limit, bucketSize int) ClientOption {
-	return func(c *client) {
+	return func(c *client) error {
 		c.rateLimiter = rate.NewLimiter(refillRate, bucketSize)
+		return nil
 	}
 }
+
+// WithCARootCert is a functional option that adds the PEM-encoded root certificate
+// found at the given path to the TLSClientConfig of the client's underlying HTTPClient.
+func WithCARootCert(path string) ClientOption {
+	return func(c *client) error {
+		cert, err := ioutil.ReadFile(path)
+		if err != nil {
+			log.L().Error(err.Error())
+			return err
+		}
+		certPool := x509.NewCertPool()
+		ok := certPool.AppendCertsFromPEM(cert)
+		if !ok {
+			return errors.New("no certificates were successfully parsed")
+		}
+		// Use cleanhttp.DefaultTransport, as that's what is used by retryablehttp.NewClient()
+		transport := cleanhttp.DefaultTransport()
+		transport.TLSClientConfig = &tls.Config{
+			RootCAs: certPool,
+		}
+		c.httpClient.HTTPClient.Transport = transport
+		return nil
+	}
+}
+
 func parseAndValidateURL(apiURL string) (*url.URL, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil {
