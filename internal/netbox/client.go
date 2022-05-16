@@ -72,8 +72,7 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	}
 
 	for _, opt := range opts {
-		err := opt(c)
-		if err != nil {
+		if err := opt(c); err != nil {
 			return nil, err
 		}
 	}
@@ -112,8 +111,7 @@ func WithCARootCert(path string) ClientOption {
 			return err
 		}
 		certPool := x509.NewCertPool()
-		ok := certPool.AppendCertsFromPEM(cert)
-		if !ok {
+		if !certPool.AppendCertsFromPEM(cert) {
 			return errors.New("no certificates were successfully parsed")
 		}
 		// Use cleanhttp.DefaultTransport, as that's what is used by retryablehttp.NewClient()
