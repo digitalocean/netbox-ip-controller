@@ -286,6 +286,9 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 		clientOpts = append(clientOpts, netbox.WithCARootCert(globalCfg.netboxCACertPath))
 	}
 	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken, clientOpts...)
+	if err != nil {
+		return err
+	}
 
 	crdClient, err := crdregistration.NewClient(globalCfg.kubeConfig)
 	if err != nil {
