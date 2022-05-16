@@ -43,15 +43,17 @@ const (
 	flagServicePublishLabels = "service-publish-labels"
 	flagClusterDomain        = "cluster-domain"
 	flagDebug                = "debug"
+	flagNetboxCACertPath     = "netbox-ca-cert-path"
 )
 
 type globalConfig struct {
-	kubeConfig   *rest.Config
-	netboxAPIURL string
-	netboxToken  string
-	netboxQPS    rate.Limit
-	netboxBurst  int
-	logger       *log.Logger
+	kubeConfig       *rest.Config
+	netboxAPIURL     string
+	netboxToken      string
+	netboxQPS        rate.Limit
+	netboxBurst      int
+	logger           *log.Logger
+	netboxCACertPath string
 }
 
 var globalCfg = &globalConfig{}
@@ -104,6 +106,7 @@ func registerGlobalFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().Float64(flagNetBoxQPS, 100.0, "average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second")
 	cmd.PersistentFlags().Int(flagNetBoxBurst, 1, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
 	cmd.PersistentFlags().Bool(flagDebug, false, "turn on debug logging")
+	cmd.PersistentFlags().String(flagNetboxCACertPath, "", "absolute path to a file containing a PEM-encoded root certificate to verify NetBox server's certificate")
 }
 
 // register flags relevant for the root command itself, but not its children
@@ -141,6 +144,7 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	cfg.kubeConfig.Burst = v.GetInt(flagKubeBurst)
 	cfg.netboxQPS = rate.Limit(v.GetFloat64(flagNetBoxQPS))
 	cfg.netboxBurst = v.GetInt(flagNetBoxBurst)
+	cfg.netboxCACertPath = v.GetString(flagNetboxCACertPath)
 
 	err = cfg.validate()
 	if err != nil {
@@ -274,10 +278,17 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	logger := globalCfg.logger
 	defer logger.Sync()
 
-	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken,
+	clientOpts := []netbox.ClientOption{
 		netbox.WithRateLimiter(globalCfg.netboxQPS, globalCfg.netboxBurst),
 		netbox.WithLogger(logger),
-	)
+	}
+	if globalCfg.netboxCACertPath != "" {
+		clientOpts = append(clientOpts, netbox.WithCARootCert(globalCfg.netboxCACertPath))
+	}
+	netboxClient, err := netbox.NewClient(globalCfg.netboxAPIURL, globalCfg.netboxToken, clientOpts...)
+	if err != nil {
+		return err
+	}
 
 	crdClient, err := crdregistration.NewClient(globalCfg.kubeConfig)
 	if err != nil {
