@@ -47,9 +47,10 @@ type client struct {
 	baseURL     string
 	token       string
 	rateLimiter *rate.Limiter
+	logger      *log.Logger
 }
 
-// ClientOption is a function type to pass options to NewClient
+// ClientOption is a function type to pass options to NewClient.
 type ClientOption func(*client)
 
 // NewClient sets up a new NetBox client with default authorization
@@ -64,6 +65,7 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 		httpClient: retryableHTTPClient(5),
 		baseURL:    strings.TrimSuffix(u.String(), "/"),
 		token:      apiToken,
+		logger:     log.L(),
 	}
 
 	for _, opt := range opts {
@@ -75,6 +77,13 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	}
 
 	return c, nil
+}
+
+// WithLogger sets the logger to be used by the client.
+func WithLogger(logger *log.Logger) ClientOption {
+	return func(c *client) {
+		c.logger = logger
+	}
 }
 
 // WithRateLimiter is a functional option that attaches a token bucket style rate limiter
@@ -125,7 +134,7 @@ func (c *client) UpsertUIDField(ctx context.Context) error {
 	}
 
 	if existingField != nil {
-		log.L().Info("UID field already exists")
+		c.logger.Info("UID field already exists")
 		return nil
 	}
 
@@ -256,7 +265,7 @@ func (c *client) UpsertIP(ctx context.Context, ip *IPAddress) (*IPAddress, error
 	}
 
 	if existingIP != nil && !existingIP.changed(ip) {
-		log.L().Info("IP has not changed - not updating")
+		c.logger.Info("IP has not changed - not updating")
 		return nil, nil
 	}
 

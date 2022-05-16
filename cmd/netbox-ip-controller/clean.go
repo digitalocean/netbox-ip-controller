@@ -35,6 +35,8 @@ func newCleanCommand() *cobra.Command {
 }
 
 func clean(ctx context.Context, cfg *globalConfig) error {
+	defer cfg.logger.Sync()
+
 	scheme := runtime.NewScheme()
 	if err := v1beta1.AddToScheme(scheme); err != nil {
 		return err
@@ -44,7 +46,10 @@ func clean(ctx context.Context, cfg *globalConfig) error {
 		return fmt.Errorf("creating k8s client: %w", err)
 	}
 
-	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken, netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst))
+	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken,
+		netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst),
+		netbox.WithLogger(cfg.logger),
+	)
 	if err != nil {
 		return fmt.Errorf("creating netbox client: %w", err)
 	}
@@ -62,7 +67,7 @@ func clean(ctx context.Context, cfg *globalConfig) error {
 
 	var errs multierror.Error
 	for _, ip := range netboxipList.Items {
-		ll := log.L().With(log.String("uid", string(ip.UID)), log.Any("ip", ip.Spec.Address))
+		ll := cfg.logger.With(log.String("uid", string(ip.UID)), log.Any("ip", ip.Spec.Address))
 
 		err := retry.OnError(
 			backoff1min,
