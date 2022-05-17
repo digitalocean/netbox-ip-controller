@@ -1,8 +1,7 @@
 # NetBox IP Controller
 
-This controller watches Kubernetes pods and services and imports their IPs into NetBox.
-
-Under development.
+This controller watches Kubernetes pods and services and imports their IPs,
+along with some metadata such as domain names and Kubernetes labels, into NetBox.
 
 ## Configuration
 
@@ -27,6 +26,27 @@ with dashes (`-`) replaced with underscores (`_`).
 `pod-publish-labels` | `app` | Comma-separated list of kubernetes pod labels to be added to the IP description in NetBox in `label: label_value` format. Optional. 
 `service-publish-labels` | `app` | Comma-separated list of kubernetes service labels to be added to the IP description in NetBox in `label: label_value` format. Optional. 
 `debug` | `false` | Turns on debug logging. Optional.
+
+## Running locally
+
+The most basic setup includes a NetBox and Kubernetes apiserver to connect to. The controller will be using `current-context` from the specified kubeconfig:
+
+```
+go get github.com/digitalocean/netbox-ip-controller/cmd/netbox-ip-controller
+netbox-ip-controller --kube-config=/.kube/config --netbox-api-url=https://some-netbox.example.com/api --netbox-token=<your-token> \
+  
+```
+
+## Running in-cluster
+
+After cloning the repo, build the docker image:
+```
+docker build -t <username>/netbox-ip-controller:<tag> ./cmd/netbox-ip-controller/
+docker push <username>/netbox-ip-controller:<tag>
+```
+
+A sample deployment can be found at [docs/example-deployment.yml](docs/example-deployment.yml).
+If you have RBAC enabled in the cluster, you will also need [docs/rbac.yml](/docs/rbac.yml).
 
 ## Uninstall
 

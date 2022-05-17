@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: netbox-ip-controller
+  name: netbox-ip-controller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netbox-ip-controller
+  template:
+    metadata:
+      labels:
+        app: netbox-ip-controller
+    spec:
+      serviceAccountName: netbox-ip-controller
+      containers:
+        name: controller
+        image: docker.io/<username>/netbox-ip-controller:<tag>
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8001 # for metrics
+            protocol: TCP
+      - env:
+        - name: NETBOX_API_URL
+          value: https://some-netbox-api.example.com/api
+        - name: NETBOX_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: netbox-token
+              name: netbox-ip-controller
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: netbox-ip-controller
+  name: netbox-ip-controller
+  namespace: default
+type: Opaque
+data:
+  netbox-token: your-token-base64-encoded
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: netbox-ip-controller
+  namespace: default        
+      
