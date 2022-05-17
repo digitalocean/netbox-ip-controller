@@ -56,6 +56,11 @@ and remove `NetBoxIP` custom resource objects from the cluster.
 Make sure to supply the same `netbox-api-url`, `netbox-token`, and `kube-config` (if any) as those used
 by the running controller.
 
+## Contributing
+
+Contributions are welcome and appreciated. To help us review code and resolve issues faster,
+please follow the [guidelines](CONTRIBUTING.md).
+
 ## License
 
 Copyright 2022 DigitalOcean
