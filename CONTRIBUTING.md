@@ -2,7 +2,7 @@
 
 ## Issues
 
-Before filing a new issue, check if it has already been reported and vote with a :thumbs-up:. If the existing issue is a bug,
+Before filing a new issue, check if it has already been reported and vote with a :+1: if it has. If the existing issue is a bug,
 and its description doesn't include your specific observed behavior or your environment, add a comment.
 
 Feature requests:
