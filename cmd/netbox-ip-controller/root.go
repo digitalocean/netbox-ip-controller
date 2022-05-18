@@ -75,13 +75,12 @@ type globalConfig struct {
 var globalCfg = &globalConfig{}
 
 type rootConfig struct {
-	metricsAddr     string
-	podTags         []string
-	serviceTags     []string
-	podLabels       map[string]bool
-	serviceLabels   map[string]bool
-	clusterDomain   string
-	rateLimitNetbox bool
+	metricsAddr   string
+	podTags       []string
+	serviceTags   []string
+	podLabels     map[string]bool
+	serviceLabels map[string]bool
+	clusterDomain string
 }
 
 func newRootCommand() *cobra.Command {
