@@ -28,6 +28,9 @@ jobs:
     - name: Checkout current branch
       uses: actions/checkout@v2
 
+    - name: gofmt
+      run : ./scripts/gofmt.sh
+      
     - name: Install Revive
       run : go install github.com/mgechev/revive@v1.2.1
 
