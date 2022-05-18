@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// package metrics contains all custom metrics to be exported to prometheus
+// Package metrics contains all custom metrics to be exported to prometheus
 package metrics
 
 import (
@@ -22,7 +22,8 @@ import (
 	kubemetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-// RegisterCustomMetrics registers all metrics in this package to the given prometheus registry
+// The init function registers all metrics in this package to the prometheus registry
+// exposed by the kubernetes controller manager
 func init() {
 	kubemetrics.Registry.MustRegister(netboxTotalRequests)
 }
@@ -34,7 +35,7 @@ var (
 	})
 )
 
-// IncremementNetboxTotalRequests increments the netbox_total_requests metric
+// IncrementNetboxRequestsTotal increments the netbox_total_requests metric
 func IncrementNetboxRequestsTotal() {
 	netboxTotalRequests.Inc()
 }
