@@ -6,14 +6,18 @@ on:
       - master
 
 jobs:
+
   go_test:
     name: Test
     strategy:
       matrix:
         go-version: [1.18.2]
         platform: [Linux]
+    env:
+      GOPATH: "/runner/_work/go"
 
     runs-on: ${{ matrix.platform }}
+
     steps:
 
     - name: Set up Go
@@ -24,5 +28,13 @@ jobs:
     - name: Checkout current branch
       uses: actions/checkout@v2
 
+    - name: Install Revive
+      run : go install github.com/mgechev/revive@v1.2.1
+
+    - name: Lint
+      run : revive -exclude vendor/... ./...
+
     - name: Test    
-      run: ./scripts/test.sh
+      run : ./scripts/test.sh
+
+
