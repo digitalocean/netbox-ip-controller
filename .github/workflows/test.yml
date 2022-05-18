@@ -30,12 +30,18 @@ jobs:
 
     - name: gofmt
       run : ./scripts/gofmt.sh
-      
+
     - name: Install Revive
       run : go install github.com/mgechev/revive@v1.2.1
 
     - name: Lint
       run : revive -exclude vendor/... ./...
+
+    - name: Install 
+      run : go install honnef.co/go/tools/cmd/staticcheck@v0.3.0
+
+    - name: Static check
+      run : ./scripts/static-check.sh
 
     - name: Test    
       run : ./scripts/test.sh
