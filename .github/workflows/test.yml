@@ -6,14 +6,18 @@ on:
       - master
 
 jobs:
+
   go_test:
     name: Test
     strategy:
       matrix:
         go-version: [1.18.2]
         platform: [Linux]
+    env:
+      GOPATH: "/runner/_work/go"
 
     runs-on: ${{ matrix.platform }}
+
     steps:
 
     - name: Set up Go
@@ -24,5 +28,22 @@ jobs:
     - name: Checkout current branch
       uses: actions/checkout@v2
 
+    - name: gofmt
+      run : ./scripts/gofmt.sh
+
+    - name: Install Revive
+      run : go install github.com/mgechev/revive@v1.2.1
+
+    - name: Lint
+      run : revive -exclude vendor/... ./...
+
+    - name: Install 
+      run : go install honnef.co/go/tools/cmd/staticcheck@v0.3.0
+
+    - name: Static check
+      run : ./scripts/static-check.sh
+
     - name: Test    
-      run: ./scripts/test.sh
+      run : ./scripts/test.sh
+
+

@@ -208,7 +208,7 @@ func TestRootConfigValidation(t *testing.T) {
 	}
 }
 
-func testSanitizeStringSlices(t *testing.T) {
+func TestSanitizeStringSlices(t *testing.T) {
 	tests := []struct {
 		name         string
 		flags        map[string]string
