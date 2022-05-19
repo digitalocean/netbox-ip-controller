@@ -16,6 +16,10 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
 
+    env:
+      # TODO: CHANGE TO A PUBLIC REGISTRY
+      TEST_IMAGE: "docker.internal.digitalocean.com/platcore/envtest:b2d9f74c85"
+
     steps:
 
     - name: Set up Go
@@ -25,6 +29,12 @@ jobs:
 
     - name: Checkout current branch
       uses: actions/checkout@v2
+      with:
+        fetch-depth: '0'
+
+    # Build a new testenv image to use iff the Dockerfile or Makefile is changed in this PR
+    - name: Build image
+      run : . scripts/build-image-conditionally.sh
 
     - name: Run integration tests
       run : ./scripts/integration-test.sh
