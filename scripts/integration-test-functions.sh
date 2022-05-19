@@ -115,6 +115,6 @@ function execute_test {
     --network netbox-integration \
     --volume "${CONTROLLER_DIR}":/netbox-ip-controller \
     --workdir /netbox-ip-controller \
-    --rm --interactive docker.internal.digitalocean.com/platcore/envtest:b2d9f74c85 \
+    --rm --interactive $TEST_IMAGE \
     go test -tags="integration sandbox" github.com/digitalocean/netbox-ip-controller/cmd/netbox-ip-controller "$@"
 }
