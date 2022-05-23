@@ -21,7 +21,7 @@ function cleanup_test {
   fi
 }
 
-# Sets up postgres, redis, and netbox in docker containers to be used by the integrationt test
+# Sets up postgres, redis, and netbox in docker containers to be used by the integration test
 function setup_test {
 
   POSTGRES_IMAGE=postgres:14
