@@ -2,6 +2,8 @@ GITCOMMIT := $(shell git rev-parse --short=10 HEAD 2>/dev/null)
 GITCOMMIT_LONG := $(shell git rev-parse HEAD 2>/dev/null)
 NAME := netbox-ip-controller
 IMAGE := "${NAME}:$(GITCOMMIT)"
+# TODO: CHANGE TO A PUBLIC REGISTRY
+ENVTEST := docker.internal.digitalocean.com/netbox-ip-controller/envtest
 
 K8S_VERSION := 1.22.5
 ETCD_VERSION := 3.5.0
@@ -52,4 +54,20 @@ crd:
 
 .PHONY: envtest-image
 envtest-image:
-	docker build --build-arg GO_VERSION=$(GO_VERSION) --build-arg K8S_VERSION=$(K8S_VERSION) --build-arg ETCD_VERSION=$(ETCD_VERSION) -t "envtest:$(GITCOMMIT)" ./test
+	docker build --build-arg GO_VERSION=$(GO_VERSION) --build-arg K8S_VERSION=$(K8S_VERSION) --build-arg ETCD_VERSION=$(ETCD_VERSION) -t "$(ENVTEST):$(GITCOMMIT)" ./test
+
+.PHONY:
+integration-test:
+	./local/local-integration-test.sh all 
+
+.PHONY:
+setup: 
+	./local/local-integration-test.sh setup
+
+.PHONY:
+execute:
+	./local/local-integration-test.sh execute
+
+.PHONY:
+cleanup:
+	./local/local-integration-test.sh cleanup

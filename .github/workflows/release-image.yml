@@ -1,0 +1,32 @@
+name: Build envtest image
+
+# Run when a PR that makes an edit to test directory or the Makefile is merged with master
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "test/**"
+      - "Makefile"
+
+jobs: 
+
+  build_image:
+    name: Build image
+    strategy:
+      matrix:
+        platform: [Linux]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+
+    - name: Checkout current branch
+      uses: actions/checkout@v2
+
+    - name: Build image
+      run : |
+        make envtest-image
+        docker push $(docker images --format {{.Repository}}:{{.Tag}} | head -n1)
+  
+  

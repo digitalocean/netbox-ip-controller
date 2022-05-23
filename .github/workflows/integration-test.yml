@@ -1,0 +1,40 @@
+name: Integration test
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+
+  integration_test:
+    name: Integration test
+    strategy:
+      matrix:
+        go-version: [1.18.2]
+        platform: [Linux]
+
+    runs-on: ${{ matrix.platform }}
+
+    env:
+      # TODO: CHANGE TO A PUBLIC REGISTRY
+      TEST_IMAGE: "docker.internal.digitalocean.com/platcore/envtest:b2d9f74c85"
+
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Checkout current branch
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: '0'
+
+    # Build a new testenv image to use if and only if the Dockerfile or Makefile is changed in this PR
+    - name: Build image
+      run : ./scripts/build-image-conditionally.sh
+
+    - name: Run integration tests
+      run : ./scripts/integration-test.sh
