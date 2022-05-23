@@ -55,3 +55,19 @@ crd:
 .PHONY: envtest-image
 envtest-image:
 	docker build --build-arg GO_VERSION=$(GO_VERSION) --build-arg K8S_VERSION=$(K8S_VERSION) --build-arg ETCD_VERSION=$(ETCD_VERSION) -t "$(ENVTEST):$(GITCOMMIT)" ./test
+
+.PHONY:
+integration-test:
+	./local/local-integration-test.sh all 
+
+.PHONY:
+setup: 
+	./local/local-integration-test.sh setup
+
+.PHONY:
+execute:
+	./local/local-integration-test.sh execute
+
+.PHONY:
+cleanup:
+	./local/local-integration-test.sh cleanup

@@ -37,6 +37,12 @@ netbox-ip-controller --kube-config=/.kube/config --netbox-api-url=https://some-n
   
 ```
 
+## Running integration tests locally
+
+Integration tests can be run locally by using the `integration-test` make target.
+This sets up, executes, and cleans up the integration test. Alternatively, you can use the `setup`, `execute`, and `cleanup`
+targets individually, which can be helpful for leaving the netbox environment up after executing tests for debugging.
+
 ## Running in-cluster
 
 After cloning the repo, build the docker image:
