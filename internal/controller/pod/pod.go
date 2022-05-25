@@ -116,26 +116,37 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	ip, err := r.netboxipFromPod(&pod)
+	// ips is a slice to support dual stack IP addresses. If r.dualStackIP is false, ips will
+	// always be a slice with 1 element
+	ips, err := r.netboxipFromPod(&pod, r.dualStackIP)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	if err := ctrl.DeclareOwner(ip, &pod); err != nil {
-		return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
-	}
 
-	if pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-		if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
-			return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+	for _, ip := range ips {
+
+		if err := ctrl.DeclareOwner(ip, &pod); err != nil {
+			return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
 		}
 
-		return reconcile.Result{}, nil
+		if pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
+				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+			}
+
+			return reconcile.Result{}, nil
+		}
+
+		err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
-	return reconcile.Result{}, ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
+	return reconcile.Result{}, nil
 }
 
-func (r *reconciler) netboxipFromPod(pod *corev1.Pod) (*v1beta1.NetBoxIP, error) {
+func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta1.NetBoxIP, error) {
 	labels := []string{fmt.Sprintf("namespace: %s", pod.Namespace)}
 	for key, value := range pod.Labels {
 		if r.labels[key] {
@@ -151,34 +162,47 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod) (*v1beta1.NetBoxIP, error)
 		})
 	}
 
-	var addr netip.Addr
-	if pod.Status.PodIP != "" {
-		var err error
-		addr, err = netip.ParseAddr(pod.Status.PodIP)
-		if err != nil {
-			return nil, fmt.Errorf("invalid IP address: %w", err)
+	var ips []string
+	if dualStack {
+		for _, ip := range pod.Status.PodIPs {
+			ips = append(ips, ip.IP)
 		}
+	} else {
+		ips = []string{pod.Status.PodIP}
 	}
 
-	ip := &v1beta1.NetBoxIP{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       netboxcrd.NetBoxIPKind,
-			APIVersion: "v1beta1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ctrl.NetBoxIPName(pod),
-			Namespace: pod.Namespace,
-			Labels: map[string]string{
-				netboxctrl.NameLabel: pod.Name,
+	var podIPs []*v1beta1.NetBoxIP
+	for _, podIP := range ips {
+		var addr netip.Addr
+		if podIP != "" {
+			var err error
+			addr, err = netip.ParseAddr(podIP)
+			if err != nil {
+				return nil, fmt.Errorf("invalid IP address: %w", err)
+			}
+		}
+
+		ip := &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       netboxcrd.NetBoxIPKind,
+				APIVersion: "v1beta1",
 			},
-		},
-		Spec: v1beta1.NetBoxIPSpec{
-			Address:     addr,
-			DNSName:     pod.Name,
-			Tags:        tags,
-			Description: strings.Join(labels, ", "),
-		},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctrl.NetBoxIPName(pod),
+				Namespace: pod.Namespace,
+				Labels: map[string]string{
+					netboxctrl.NameLabel: pod.Name,
+				},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address:     addr,
+				DNSName:     pod.Name,
+				Tags:        tags,
+				Description: strings.Join(labels, ", "),
+			},
+		}
+		podIPs = append(podIPs, ip)
 	}
 
-	return ip, nil
+	return podIPs, nil
 }
