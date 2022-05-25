@@ -57,9 +57,10 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 
 	return &controller{
 		reconciler: &reconciler{
-			tags:   s.Tags,
-			labels: s.Labels,
-			log:    logger.With(log.String("reconciler", "pod")),
+			tags:        s.Tags,
+			labels:      s.Labels,
+			log:         logger.With(log.String("reconciler", "pod")),
+			dualStackIP: s.DualStackIP,
 		},
 	}, nil
 }
@@ -75,10 +76,11 @@ func (c *controller) AddToManager(mgr manager.Manager) error {
 }
 
 type reconciler struct {
-	kubeClient client.Client
-	tags       []netbox.Tag
-	labels     map[string]bool
-	log        *log.Logger
+	kubeClient  client.Client
+	tags        []netbox.Tag
+	labels      map[string]bool
+	log         *log.Logger
+	dualStackIP bool
 }
 
 // InjectClient injects the client and implements inject.Client.

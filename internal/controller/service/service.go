@@ -61,6 +61,7 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 			labels:        s.Labels,
 			clusterDomain: s.ClusterDomain,
 			log:           logger.With(log.String("reconciler", "service")),
+			dualStackIP:   s.DualStackIP,
 		},
 	}, nil
 }
@@ -81,6 +82,7 @@ type reconciler struct {
 	labels        map[string]bool
 	clusterDomain string
 	log           *log.Logger
+	dualStackIP   bool
 }
 
 // InjectClient injects the client and implements inject.Client.
