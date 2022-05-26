@@ -113,31 +113,43 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	ip, err := r.netboxipFromService(&svc)
+	// ips is a slice to support dual stack IP addresses. If r.dualStackIP is false, ips will
+	// always be a slice with 1 element
+	ips, err := r.netboxipFromService(&svc, r.dualStackIP)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	if err := ctrl.DeclareOwner(ip, &svc); err != nil {
-		return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
-	}
 
-	// in addition to ClusterIP type services, LoadBalancer and NodePort
-	// also have an underlying ClusterIP; we're not publishing external IPs
-	// for such services though
-	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-		// ClusterIP may be changed to "" when service type is changed to ExternalName;
-		// "None" corresponds to a headless service
-		if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
-			return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+	for _, ip := range ips {
+
+		if err := ctrl.DeclareOwner(ip, &svc); err != nil {
+			return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
 		}
 
-		return reconcile.Result{}, nil
+		// in addition to ClusterIP type services, LoadBalancer and NodePort
+		// also have an underlying ClusterIP; we're not publishing external IPs
+		// for such services though
+		if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
+			// ClusterIP may be changed to "" when service type is changed to ExternalName;
+			// "None" corresponds to a headless service
+			if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
+				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+			}
+
+			return reconcile.Result{}, nil
+		}
+
+		err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
 	}
 
-	return reconcile.Result{}, ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
+	return reconcile.Result{}, nil
 }
 
-func (r *reconciler) netboxipFromService(svc *corev1.Service) (*v1beta1.NetBoxIP, error) {
+func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([]*v1beta1.NetBoxIP, error) {
 	var labels []string
 	for key, value := range svc.Labels {
 		if r.labels[key] {
@@ -153,34 +165,45 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service) (*v1beta1.NetBoxIP
 		})
 	}
 
-	var addr netip.Addr
-	if svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None" {
-		var err error
-		addr, err = netip.ParseAddr(svc.Spec.ClusterIP)
-		if err != nil {
-			return nil, fmt.Errorf("invalid IP address: %w", err)
+	var ips []string
+	if dualStack {
+		ips = svc.Spec.ClusterIPs
+	} else {
+		ips = []string{svc.Spec.ClusterIP}
+	}
+
+	var svcIPs []*v1beta1.NetBoxIP
+	for _, svcIP := range ips {
+		var addr netip.Addr
+		if svcIP != "" && svcIP != "None" {
+			var err error
+			addr, err = netip.ParseAddr(svcIP)
+			if err != nil {
+				return nil, fmt.Errorf("invalid IP address: %w", err)
+			}
 		}
-	}
 
-	ip := &v1beta1.NetBoxIP{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       netboxcrd.NetBoxIPKind,
-			APIVersion: "v1beta1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ctrl.NetBoxIPName(svc),
-			Namespace: svc.Namespace,
-			Labels: map[string]string{
-				netboxctrl.NameLabel: svc.Name,
+		ip := &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       netboxcrd.NetBoxIPKind,
+				APIVersion: "v1beta1",
 			},
-		},
-		Spec: v1beta1.NetBoxIPSpec{
-			Address:     addr,
-			DNSName:     fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, r.clusterDomain),
-			Tags:        tags,
-			Description: strings.Join(labels, ", "),
-		},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ctrl.NetBoxIPName(svc),
+				Namespace: svc.Namespace,
+				Labels: map[string]string{
+					netboxctrl.NameLabel: svc.Name,
+				},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address:     addr,
+				DNSName:     fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, r.clusterDomain),
+				Tags:        tags,
+				Description: strings.Join(labels, ", "),
+			},
+		}
+		svcIPs = append(svcIPs, ip)
 	}
 
-	return ip, nil
+	return svcIPs, nil
 }
