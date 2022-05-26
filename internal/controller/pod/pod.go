@@ -162,17 +162,17 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta
 		})
 	}
 
-	var ips []string
+	var podIPs []string
 	if dualStack {
 		for _, ip := range pod.Status.PodIPs {
-			ips = append(ips, ip.IP)
+			podIPs = append(podIPs, ip.IP)
 		}
 	} else {
-		ips = []string{pod.Status.PodIP}
+		podIPs = []string{pod.Status.PodIP}
 	}
 
-	var podIPs []*v1beta1.NetBoxIP
-	for _, podIP := range ips {
+	var ips []*v1beta1.NetBoxIP
+	for _, podIP := range podIPs {
 		var addr netip.Addr
 		if podIP != "" {
 			var err error
@@ -182,7 +182,7 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta
 			}
 		}
 
-		ip := &v1beta1.NetBoxIP{
+		ips = append(ips, &v1beta1.NetBoxIP{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       netboxcrd.NetBoxIPKind,
 				APIVersion: "v1beta1",
@@ -200,9 +200,8 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta
 				Tags:        tags,
 				Description: strings.Join(labels, ", "),
 			},
-		}
-		podIPs = append(podIPs, ip)
+		})
 	}
 
-	return podIPs, nil
+	return ips, nil
 }

@@ -165,15 +165,15 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([
 		})
 	}
 
-	var ips []string
+	var svcIPs []string
 	if dualStack {
-		ips = svc.Spec.ClusterIPs
+		svcIPs = svc.Spec.ClusterIPs
 	} else {
-		ips = []string{svc.Spec.ClusterIP}
+		svcIPs = []string{svc.Spec.ClusterIP}
 	}
 
-	var svcIPs []*v1beta1.NetBoxIP
-	for _, svcIP := range ips {
+	var ips []*v1beta1.NetBoxIP
+	for _, svcIP := range svcIPs {
 		var addr netip.Addr
 		if svcIP != "" && svcIP != "None" {
 			var err error
@@ -183,7 +183,7 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([
 			}
 		}
 
-		ip := &v1beta1.NetBoxIP{
+		ips = append(ips, &v1beta1.NetBoxIP{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       netboxcrd.NetBoxIPKind,
 				APIVersion: "v1beta1",
@@ -201,9 +201,9 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([
 				Tags:        tags,
 				Description: strings.Join(labels, ", "),
 			},
-		}
-		svcIPs = append(svcIPs, ip)
+		})
+
 	}
 
-	return svcIPs, nil
+	return ips, nil
 }
