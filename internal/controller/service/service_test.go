@@ -296,7 +296,9 @@ func TestReconcile(t *testing.T) {
 				t.Fatalf("fetching NetBoxIP: %q\n", err)
 			}
 
-			if test.expectedNetBoxIP == nil && !kubeerrors.IsNotFound(err) {
+			if test.expectedNetBoxIP != nil && kubeerrors.IsNotFound(err) {
+				t.Errorf("want NetBoxIP to exist, but got not found error")
+			} else if test.expectedNetBoxIP == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want NetBoxIP not to exist, got %v\n", actualNetBoxIP)
 			} else if test.expectedNetBoxIP != nil {
 				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmpopts.IgnoreUnexported(netip.Addr{})); diff != "" {
