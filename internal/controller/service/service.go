@@ -142,6 +142,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
 		if err != nil {
 			return reconcile.Result{}, err
+		} else {
+			fmt.Println("Upsert returned nil")
 		}
 
 	}
@@ -183,13 +185,17 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([
 			}
 		}
 
+		var scheme string
+		if dualStack {
+			scheme = ctrl.Scheme(addr)
+		}
 		ips = append(ips, &v1beta1.NetBoxIP{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       netboxcrd.NetBoxIPKind,
 				APIVersion: "v1beta1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctrl.NetBoxIPName(svc),
+				Name:      ctrl.NetBoxIPName(svc, scheme),
 				Namespace: svc.Namespace,
 				Labels: map[string]string{
 					netboxctrl.NameLabel: svc.Name,
