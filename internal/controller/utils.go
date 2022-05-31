@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strings"
 
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
@@ -33,10 +34,30 @@ import (
 )
 
 // NetBoxIPName derives NetBoxIP name from the object's metadata.
-func NetBoxIPName(obj client.Object) string {
+// scheme may be an empty string, in which case it is ignored.
+// Otherwise, it is appended to the returned name to distinguish
+// IPs belonging to the same pod or service (to support dual stack IPs).
+func NetBoxIPName(obj client.Object, scheme string) string {
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	// use UIDs instead of names in case of name conflicts
-	return fmt.Sprintf("%s-%s", strings.ToLower(kind), obj.GetUID())
+	name := fmt.Sprintf("%s-%s", strings.ToLower(kind), obj.GetUID())
+	if scheme != "" {
+		name = fmt.Sprintf("%s-%s", name, scheme)
+		fmt.Println(name)
+	}
+	return name
+}
+
+// Scheme returns the name of the scheme of the given IP (ipv4 or ipv6),
+// or an empty string if ip is not a valid IP address.
+func Scheme(ip netip.Addr) string {
+	if ip.Is6() || ip.Is4In6() {
+		return "ipv6"
+	} else if ip.Is4() {
+		return "ipv4"
+	} else {
+		return ""
+	}
 }
 
 // DeclareOwner sets the provided object as the controller of

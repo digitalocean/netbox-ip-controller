@@ -181,14 +181,17 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta
 				return nil, fmt.Errorf("invalid IP address: %w", err)
 			}
 		}
-
+		var scheme string
+		if dualStack {
+			scheme = ctrl.Scheme(addr)
+		}
 		ips = append(ips, &v1beta1.NetBoxIP{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       netboxcrd.NetBoxIPKind,
 				APIVersion: "v1beta1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctrl.NetBoxIPName(pod),
+				Name:      ctrl.NetBoxIPName(pod, scheme),
 				Namespace: pod.Namespace,
 				Labels: map[string]string{
 					netboxctrl.NameLabel: pod.Name,
