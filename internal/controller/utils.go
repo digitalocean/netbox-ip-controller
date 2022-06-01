@@ -43,7 +43,6 @@ func NetBoxIPName(obj client.Object, scheme string) string {
 	name := fmt.Sprintf("%s-%s", strings.ToLower(kind), obj.GetUID())
 	if scheme != "" {
 		name = fmt.Sprintf("%s-%s", name, scheme)
-		fmt.Println(name)
 	}
 	return name
 }
