@@ -41,6 +41,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+func addrComparer(x netip.Addr, y netip.Addr) bool {
+	return x.Compare(y) == 0
+}
+
 func TestReconcile(t *testing.T) {
 	name := "foo"
 	namespace := "test"
@@ -313,7 +317,7 @@ func TestReconcile(t *testing.T) {
 			} else if test.expectedNetBoxIP == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want NetBoxIP not to exist, got %v\n", actualNetBoxIP)
 			} else if test.expectedNetBoxIP != nil {
-				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmpopts.IgnoreUnexported(netip.Addr{})); diff != "" {
+				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
 					t.Errorf("NetBoxIP object (-want, +got)\n%s", diff)
 				}
 			}
