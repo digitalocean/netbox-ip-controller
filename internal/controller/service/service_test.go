@@ -385,7 +385,7 @@ func TestReconcileDualStack(t *testing.T) {
 		existingNetBoxIPs:    nil,
 		expectedIPv6NetBoxIP: nil,
 	}, {
-		name: "with ClusterIP",
+		name: "with ipv4 ClusterIP only",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Service",
@@ -434,6 +434,478 @@ func TestReconcileDualStack(t *testing.T) {
 			},
 		},
 		expectedIPv6NetBoxIP: nil,
+	}, {
+		name: "with ipv6 ClusterIP only",
+		existingService: &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(serviceUID),
+				Labels:    map[string]string{"app": "foo"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:      []corev1.ServicePort{{Port: 8080}},
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  "1:2::3",
+				ClusterIPs: []string{"1:2::3"},
+			},
+		},
+		existingNetBoxIPs:    nil,
+		expectedIPv4NetBoxIP: nil,
+		expectedIPv6NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
+	}, {
+		name: "With Both IPv4 and IPv6",
+		existingService: &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(serviceUID),
+				Labels:    map[string]string{"app": "foo"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:      []corev1.ServicePort{{Port: 8080}},
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  "192.168.0.1",
+				ClusterIPs: []string{"192.168.0.1", "1:2::3"},
+			},
+		},
+		existingNetBoxIPs: nil,
+		expectedIPv4NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
+		expectedIPv6NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
+	}, {
+		name: "Removed IPv6 address",
+		existingService: &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(serviceUID),
+				Labels:    map[string]string{"app": "foo"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:      []corev1.ServicePort{{Port: 8080}},
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  "192.168.0.1",
+				ClusterIPs: []string{"192.168.0.1"},
+			},
+		},
+		existingNetBoxIPs: []*v1beta1.NetBoxIP{
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
+					Namespace: namespace,
+					Labels:    map[string]string{netboxctrl.NameLabel: name},
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion:         "v1",
+						Kind:               "Service",
+						Name:               name,
+						UID:                types.UID(serviceUID),
+						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: pointer.Bool(true),
+					}},
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
+					DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+					Tags: []v1beta1.Tag{{
+						Name: "bar",
+						Slug: "bar",
+					}},
+					Description: "app: foo",
+				},
+			},
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+					Namespace: namespace,
+					Labels:    map[string]string{netboxctrl.NameLabel: name},
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion:         "v1",
+						Kind:               "Service",
+						Name:               name,
+						UID:                types.UID(serviceUID),
+						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: pointer.Bool(true),
+					}},
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+					DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+					Tags: []v1beta1.Tag{{
+						Name: "bar",
+						Slug: "bar",
+					}},
+					Description: "app: foo",
+				},
+			}},
+		expectedIPv4NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
+		expectedIPv6NetBoxIP: nil,
+	}, {
+		name: "Removed IPv4 address",
+		existingService: &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(serviceUID),
+				Labels:    map[string]string{"app": "foo"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:      []corev1.ServicePort{{Port: 8080}},
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  "1:2::3",
+				ClusterIPs: []string{"1:2::3"},
+			},
+		},
+		existingNetBoxIPs: []*v1beta1.NetBoxIP{
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
+					Namespace: namespace,
+					Labels:    map[string]string{netboxctrl.NameLabel: name},
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion:         "v1",
+						Kind:               "Service",
+						Name:               name,
+						UID:                types.UID(serviceUID),
+						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: pointer.Bool(true),
+					}},
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
+					DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+					Tags: []v1beta1.Tag{{
+						Name: "bar",
+						Slug: "bar",
+					}},
+					Description: "app: foo",
+				},
+			},
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+					Namespace: namespace,
+					Labels:    map[string]string{netboxctrl.NameLabel: name},
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion:         "v1",
+						Kind:               "Service",
+						Name:               name,
+						UID:                types.UID(serviceUID),
+						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: pointer.Bool(true),
+					}},
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+					DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+					Tags: []v1beta1.Tag{{
+						Name: "bar",
+						Slug: "bar",
+					}},
+					Description: "app: foo",
+				},
+			}},
+		expectedIPv4NetBoxIP: nil,
+		expectedIPv6NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
+	}, {
+		name: "fix NetBoxIPs that got out of sync",
+		existingService: &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(serviceUID),
+				Labels:    map[string]string{"app": "foo"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:      []corev1.ServicePort{{Port: 8080}},
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  "1:2::4",
+				ClusterIPs: []string{"1:2::4", "192.168.0.2"},
+			},
+		},
+		existingNetBoxIPs: []*v1beta1.NetBoxIP{
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
+					Namespace: namespace,
+					Labels:    map[string]string{netboxctrl.NameLabel: name},
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion:         "v1",
+						Kind:               "Service",
+						Name:               name,
+						UID:                types.UID(serviceUID),
+						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: pointer.Bool(true),
+					}},
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
+					DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+					Tags: []v1beta1.Tag{{
+						Name: "bar",
+						Slug: "bar",
+					}},
+					Description: "app: foo",
+				},
+			},
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetBoxIP",
+					APIVersion: v1beta1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+					Namespace: namespace,
+					Labels:    map[string]string{netboxctrl.NameLabel: name},
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion:         "v1",
+						Kind:               "Service",
+						Name:               name,
+						UID:                types.UID(serviceUID),
+						Controller:         pointer.Bool(true),
+						BlockOwnerDeletion: pointer.Bool(true),
+					}},
+				},
+				Spec: v1beta1.NetBoxIPSpec{
+					Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
+					DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+					Tags: []v1beta1.Tag{{
+						Name: "bar",
+						Slug: "bar",
+					}},
+					Description: "app: foo",
+				},
+			}},
+		expectedIPv4NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom4([4]byte{192, 168, 0, 2}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
+		expectedIPv6NetBoxIP: &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "NetBoxIP",
+				APIVersion: v1beta1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%s-ipv6", serviceUID),
+				Namespace: namespace,
+				Labels:    map[string]string{netboxctrl.NameLabel: name},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               name,
+					UID:                types.UID(serviceUID),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
+				}},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4}),
+				DNSName: fmt.Sprintf("%s.%s.svc.testclusterdomain", name, namespace),
+				Tags: []v1beta1.Tag{{
+					Name: "bar",
+					Slug: "bar",
+				}},
+				Description: "app: foo",
+			},
+		},
 	}}
 
 	for _, test := range tests {
