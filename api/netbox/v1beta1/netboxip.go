@@ -75,7 +75,9 @@ func (spec NetBoxIPSpec) Changed(spec2 NetBoxIPSpec) bool {
 	return !cmp.Equal(spec, spec2,
 		cmpopts.SortSlices(sortTags),
 		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreUnexported(netip.Addr{}),
+		cmp.Comparer(func(x netip.Addr, y netip.Addr) bool {
+			return x.Compare(y) == 0
+		}),
 	)
 }
 

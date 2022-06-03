@@ -30,6 +30,7 @@ import (
 
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -146,6 +147,35 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	}
 
+	// If dual stack IPs are enabled, it's possible that one IP was deleted but another still
+	// exists for the service. For both IPv4 and IPv6 NetBoxIPs (if any), check if their addresses
+	// are still used by the service and delete if not.
+	if r.dualStackIP {
+		var v4IP v1beta1.NetBoxIP
+		err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: svc.Namespace, Name: ctrl.NetBoxIPName(&svc, "ipv4")}, &v4IP)
+		if client.IgnoreNotFound(err) != nil {
+			return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
+		} else if !kubeerrors.IsNotFound(err) {
+			if isStaleScheme(svc, v4IP) {
+				if err := r.kubeClient.Delete(ctx, &v4IP); client.IgnoreNotFound(err) != nil {
+					return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+				}
+			}
+		}
+
+		var v6IP v1beta1.NetBoxIP
+		err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: svc.Namespace, Name: ctrl.NetBoxIPName(&svc, "ipv6")}, &v6IP)
+		if client.IgnoreNotFound(err) != nil {
+			return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
+		} else if !kubeerrors.IsNotFound(err) {
+			if isStaleScheme(svc, v6IP) {
+				if err := r.kubeClient.Delete(ctx, &v6IP); client.IgnoreNotFound(err) != nil {
+					return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+				}
+			}
+		}
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -211,4 +241,22 @@ func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([
 	}
 
 	return ips, nil
+}
+
+// Returns true if the scheme of the given NetBoxIP is not currently
+// used by the given service
+func isStaleScheme(svc corev1.Service, ip v1beta1.NetBoxIP) bool {
+	netboxIPScheme := ctrl.Scheme(ip.Spec.Address)
+	for _, addr := range svc.Spec.ClusterIPs {
+		var thisScheme string
+		if strings.Contains(addr, ".") {
+			thisScheme = "ipv4"
+		} else if strings.Contains(addr, ":") {
+			thisScheme = "ipv6"
+		}
+		if thisScheme == netboxIPScheme {
+			return false
+		}
+	}
+	return true
 }
