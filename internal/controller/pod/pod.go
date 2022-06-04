@@ -30,6 +30,7 @@ import (
 
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -143,6 +144,32 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		}
 	}
 
+	if r.dualStackIP {
+		var v4IP v1beta1.NetBoxIP
+		err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv4")}, &v4IP)
+		if client.IgnoreNotFound(err) != nil {
+			return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
+		} else if !kubeerrors.IsNotFound(err) {
+			if isStaleScheme(pod, v4IP) {
+				if err := r.kubeClient.Delete(ctx, &v4IP); client.IgnoreNotFound(err) != nil {
+					return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+				}
+			}
+		}
+
+		var v6IP v1beta1.NetBoxIP
+		err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv6")}, &v6IP)
+		if client.IgnoreNotFound(err) != nil {
+			return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
+		} else if !kubeerrors.IsNotFound(err) {
+			if isStaleScheme(pod, v6IP) {
+				if err := r.kubeClient.Delete(ctx, &v6IP); client.IgnoreNotFound(err) != nil {
+					return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+				}
+			}
+		}
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -207,4 +234,22 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta
 	}
 
 	return ips, nil
+}
+
+// Returns true if the scheme of the given NetBoxIP is not currently
+// used by the given pod
+func isStaleScheme(pod corev1.Pod, ip v1beta1.NetBoxIP) bool {
+	netboxIPScheme := ctrl.Scheme(ip.Spec.Address)
+	for _, addr := range pod.Status.PodIPs {
+		var thisScheme string
+		if strings.Contains(addr.String(), ".") {
+			thisScheme = "ipv4"
+		} else if strings.Contains(addr.String(), ":") {
+			thisScheme = "ipv6"
+		}
+		if thisScheme == netboxIPScheme {
+			return false
+		}
+	}
+	return true
 }
