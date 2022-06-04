@@ -204,7 +204,7 @@ func TestReconcile(t *testing.T) {
 		},
 		expectedNetBoxIP: nil,
 	}, {
-		name: "fix netboxip that got out of sync",
+		name: "fix NetBoxIP that got out of sync",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Service",
@@ -266,7 +266,7 @@ func TestReconcile(t *testing.T) {
 	}, {
 		// It is acceptable to have dual stack services/pods exist in a cluster even if
 		// dual-stack-ips is disabled. In this case, only the ClusterIP should be registered into netbox
-		name: "dual stack service",
+		name: "with dual stack ClusterIPs",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Service",
@@ -485,7 +485,7 @@ func TestReconcileDualStack(t *testing.T) {
 			},
 		},
 	}, {
-		name: "With Both IPv4 and IPv6",
+		name: "with both ipv4 and ipv6",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Service",
@@ -562,7 +562,7 @@ func TestReconcileDualStack(t *testing.T) {
 			},
 		},
 	}, {
-		name: "Removed IPv6 address",
+		name: "removed IPv6 address",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Service",
@@ -668,7 +668,7 @@ func TestReconcileDualStack(t *testing.T) {
 		},
 		expectedIPv6NetBoxIP: nil,
 	}, {
-		name: "Removed IPv4 address",
+		name: "removed IPv4 address",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Service",
