@@ -230,7 +230,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 	}, {
-		name: "Pod with existing IP enters completed phase",
+		name: "pod with existing IP enters completed phase",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -279,7 +279,7 @@ func TestReconcile(t *testing.T) {
 	}, {
 		// It is acceptable to have dual stack services/pods exist in a cluster even if
 		// dual-stack-ips is disabled. In this case, only the PodIP should be registered into netbox
-		name: "with dual stack pod",
+		name: "with dual stack PodIPs",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -396,7 +396,7 @@ func TestReconcileDualStack(t *testing.T) {
 		expectedIPv4NetBoxIP: nil,
 		expectedIPv6NetBoxIP: nil,
 	}, {
-		name: "with ipv4 ClusterIP only",
+		name: "with ipv4 PodIP only",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -444,7 +444,7 @@ func TestReconcileDualStack(t *testing.T) {
 		},
 		expectedIPv6NetBoxIP: nil,
 	}, {
-		name: "with ipv6 ClusterIP only",
+		name: "with ipv6 PodIP only",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -492,7 +492,7 @@ func TestReconcileDualStack(t *testing.T) {
 			},
 		},
 	}, {
-		name: "With Both IPv4 and IPv6",
+		name: "with both IPv4 and IPv6 PodIPs",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -567,7 +567,7 @@ func TestReconcileDualStack(t *testing.T) {
 			},
 		},
 	}, {
-		name: "Removed IPv6 address",
+		name: "removed IPv6 address",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
@@ -672,7 +672,7 @@ func TestReconcileDualStack(t *testing.T) {
 		},
 		expectedIPv6NetBoxIP: nil,
 	}, {
-		name: "Removed IPv4 address",
+		name: "removed IPv4 address",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Pod",
