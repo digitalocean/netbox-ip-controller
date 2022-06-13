@@ -130,6 +130,8 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 			return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
 		}
 
+		// Delete the associated NetBoxIP object if the Pod no longer has an IP assigned, or if the pod has entered
+		// a succeeded or failed phase, in which case its IP may be re-used by another pod.
 		if pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 			if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
 				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
