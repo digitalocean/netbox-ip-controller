@@ -34,15 +34,16 @@ import (
 )
 
 // NetBoxIPName derives NetBoxIP name from the object's metadata.
-// scheme may be an empty string, in which case it is ignored.
-// Otherwise, it is appended to the returned name to distinguish
-// IPs belonging to the same pod or service (to support dual stack IPs).
-func NetBoxIPName(obj client.Object, scheme string) string {
+// suffix may be an empty string, in which case it is ignored.
+// Otherwise, it is appended to the returned name to provide
+// additional context to the IP (such as including the IP address'
+// scheme as part of the name)
+func NetBoxIPName(obj client.Object, suffix string) string {
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	// use UIDs instead of names in case of name conflicts
 	name := fmt.Sprintf("%s-%s", strings.ToLower(kind), obj.GetUID())
-	if scheme != "" {
-		name = fmt.Sprintf("%s-%s", name, scheme)
+	if suffix != "" {
+		name = fmt.Sprintf("%s-%s", name, suffix)
 	}
 	return name
 }
