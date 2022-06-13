@@ -121,9 +121,9 @@ func WithClusterDomain(domain string) Option {
 
 // If passed true, WithDualStackIP enables registering both IPv6 and IPv4 address in netbox
 // for dual stack pods and services.
-func WithDualStackIP(enable bool) Option {
+func WithDualStackIP() Option {
 	return func(s *Settings) error {
-		s.DualStackIP = enable
+		s.DualStackIP = true
 		return nil
 	}
 }

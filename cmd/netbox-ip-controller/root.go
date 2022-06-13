@@ -344,23 +344,32 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 	controllers["netboxip"] = netboxController
 
-	podController, err := podctrl.New(
+	podCtrOpts := []ctrl.Option{
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.podTags, netboxClient),
 		ctrl.WithLabels(cfg.podLabels),
-		ctrl.WithDualStackIP(globalCfg.dualStackIP),
+	}
+	if globalCfg.dualStackIP {
+		podCtrOpts = append(podCtrOpts, ctrl.WithDualStackIP())
+	}
+	podController, err := podctrl.New(
+		podCtrOpts...,
 	)
 	if err != nil {
 		return fmt.Errorf("initializing pod controller: %s", err)
 	}
 	controllers["pod"] = podController
-
-	svcController, err := svcctrl.New(
+	svcCtrOpts := []ctrl.Option{
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.serviceTags, netboxClient),
 		ctrl.WithLabels(cfg.serviceLabels),
 		ctrl.WithClusterDomain(cfg.clusterDomain),
-		ctrl.WithDualStackIP(globalCfg.dualStackIP),
+	}
+	if globalCfg.dualStackIP {
+		svcCtrOpts = append(svcCtrOpts, ctrl.WithDualStackIP())
+	}
+	svcController, err := svcctrl.New(
+		svcCtrOpts...,
 	)
 	if err != nil {
 		return fmt.Errorf("initializing service controller: %s", err)
