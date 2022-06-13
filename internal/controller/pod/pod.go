@@ -140,8 +140,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 			return reconcile.Result{}, nil
 		}
 
-		err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
-		if err != nil {
+		if err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
