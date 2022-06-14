@@ -90,7 +90,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%s", podUID),
+				Name:      fmt.Sprintf("pod-%s-ipv4", podUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -148,7 +148,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%s", podUID),
+				Name:      fmt.Sprintf("pod-%s-ipv4", podUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -194,7 +194,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%s", podUID),
+				Name:      fmt.Sprintf("pod-%s-ipv4", podUID),
 				Namespace: namespace,
 			},
 			Spec: v1beta1.NetBoxIPSpec{
@@ -207,7 +207,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%s", podUID),
+				Name:      fmt.Sprintf("pod-%s-ipv4", podUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -253,7 +253,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%s", podUID),
+				Name:      fmt.Sprintf("pod-%s-ipv4", podUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -303,7 +303,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%s", podUID),
+				Name:      fmt.Sprintf("pod-%s-ipv4", podUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -359,7 +359,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			var actualNetBoxIP v1beta1.NetBoxIP
-			err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: fmt.Sprintf("pod-%s", podUID)}, &actualNetBoxIP)
+			err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: fmt.Sprintf("pod-%s-ipv4", podUID)}, &actualNetBoxIP)
 			if err != nil && !kubeerrors.IsNotFound(err) {
 				t.Fatalf("fetching NetBoxIP: %q\n", err)
 			}

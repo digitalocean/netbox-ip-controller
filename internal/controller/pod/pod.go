@@ -19,11 +19,7 @@ package pod
 import (
 	"context"
 	"fmt"
-	"net/netip"
-	"strings"
 
-	netboxctrl "github.com/digitalocean/netbox-ip-controller"
-	netboxcrd "github.com/digitalocean/netbox-ip-controller/api/netbox"
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
@@ -31,7 +27,6 @@ import (
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -117,27 +112,19 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	// ips is a slice to support dual stack IP addresses. If r.dualStackIP is false, ips will
-	// always be a slice with 1 element
-	ips, err := r.netboxipFromPod(&pod, r.dualStackIP)
+	ips, err := r.netboxIPsFromPod(&pod, r.dualStackIP)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	for _, ip := range ips {
+	// Create/update non-nil NetBoxIPs
+	for _, ip := range []*v1beta1.NetBoxIP{ips.IPv4, ips.IPv6} {
+		if ip == nil {
+			continue
+		}
 
 		if err := ctrl.DeclareOwner(ip, &pod); err != nil {
 			return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
-		}
-
-		// Delete the associated NetBoxIP object if the Pod no longer has an IP assigned, or if the pod has entered
-		// a succeeded or failed phase, in which case its IP may be re-used by another pod.
-		if pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-			if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
-				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-			}
-
-			return reconcile.Result{}, nil
 		}
 
 		if err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip); err != nil {
@@ -145,28 +132,29 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		}
 	}
 
-	if r.dualStackIP {
-		var v4IP v1beta1.NetBoxIP
-		err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv4")}, &v4IP)
-		if client.IgnoreNotFound(err) != nil {
-			return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
-		} else if !kubeerrors.IsNotFound(err) {
-			if isStaleScheme(pod, v4IP) {
-				if err := r.kubeClient.Delete(ctx, &v4IP); client.IgnoreNotFound(err) != nil {
-					return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-				}
+	// For both IPv4 and IPv6 addresses, delete the associated NetBoxIP object (if it exists) if the Pod
+	// no longer has an address of that scheme assigned, or if the pod has entered a succeeded or failed phase.
+	// This is because if the pod has entered a completed phase, its IP may be re-used by another pod.
+	var v4IP v1beta1.NetBoxIP
+	err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv4")}, &v4IP)
+	if client.IgnoreNotFound(err) != nil {
+		return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
+	} else if !kubeerrors.IsNotFound(err) {
+		if ips.IPv4 == nil || pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			if err := r.kubeClient.Delete(ctx, &v4IP); client.IgnoreNotFound(err) != nil {
+				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
 			}
 		}
+	}
 
-		var v6IP v1beta1.NetBoxIP
-		err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv6")}, &v6IP)
-		if client.IgnoreNotFound(err) != nil {
-			return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
-		} else if !kubeerrors.IsNotFound(err) {
-			if isStaleScheme(pod, v6IP) {
-				if err := r.kubeClient.Delete(ctx, &v6IP); client.IgnoreNotFound(err) != nil {
-					return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-				}
+	var v6IP v1beta1.NetBoxIP
+	err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv6")}, &v6IP)
+	if client.IgnoreNotFound(err) != nil {
+		return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
+	} else if !kubeerrors.IsNotFound(err) {
+		if ips.IPv6 == nil || pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			if err := r.kubeClient.Delete(ctx, &v6IP); client.IgnoreNotFound(err) != nil {
+				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
 			}
 		}
 	}
@@ -174,22 +162,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return reconcile.Result{}, nil
 }
 
-func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta1.NetBoxIP, error) {
-	labels := []string{fmt.Sprintf("namespace: %s", pod.Namespace)}
-	for key, value := range pod.Labels {
-		if r.labels[key] {
-			labels = append(labels, fmt.Sprintf("%s: %s", key, value))
-		}
-	}
-
-	var tags []v1beta1.Tag
-	for _, tag := range r.tags {
-		tags = append(tags, v1beta1.Tag{
-			Name: tag.Name,
-			Slug: tag.Slug,
-		})
-	}
-
+func (r *reconciler) netboxIPsFromPod(pod *corev1.Pod, dualStack bool) (*ctrl.IPs, error) {
 	var podIPs []string
 	if dualStack {
 		for _, ip := range pod.Status.PodIPs {
@@ -199,58 +172,15 @@ func (r *reconciler) netboxipFromPod(pod *corev1.Pod, dualStack bool) ([]*v1beta
 		podIPs = []string{pod.Status.PodIP}
 	}
 
-	var ips []*v1beta1.NetBoxIP
-	for _, podIP := range podIPs {
-		var addr netip.Addr
-		if podIP != "" {
-			var err error
-			addr, err = netip.ParseAddr(podIP)
-			if err != nil {
-				return nil, fmt.Errorf("invalid IP address: %w", err)
-			}
-		}
-		var scheme string
-		if dualStack {
-			scheme = ctrl.Scheme(addr)
-		}
-		ips = append(ips, &v1beta1.NetBoxIP{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       netboxcrd.NetBoxIPKind,
-				APIVersion: "v1beta1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ctrl.NetBoxIPName(pod, scheme),
-				Namespace: pod.Namespace,
-				Labels: map[string]string{
-					netboxctrl.NameLabel: pod.Name,
-				},
-			},
-			Spec: v1beta1.NetBoxIPSpec{
-				Address:     addr,
-				DNSName:     pod.Name,
-				Tags:        tags,
-				Description: strings.Join(labels, ", "),
-			},
-		})
+	ips, err := ctrl.CreateNetBoxIPs(podIPs, ctrl.NetBoxIPConfig{
+		Object:           pod,
+		DNSName:          pod.Name,
+		ReconcilerTags:   r.tags,
+		ReconcilerLabels: r.labels,
+	})
+	if err != nil {
+		return &ctrl.IPs{}, err
 	}
 
 	return ips, nil
-}
-
-// Returns true if the scheme of the given NetBoxIP is not currently
-// used by the given pod
-func isStaleScheme(pod corev1.Pod, ip v1beta1.NetBoxIP) bool {
-	netboxIPScheme := ctrl.Scheme(ip.Spec.Address)
-	for _, addr := range pod.Status.PodIPs {
-		var thisScheme string
-		if strings.Contains(addr.String(), ".") {
-			thisScheme = "ipv4"
-		} else if strings.Contains(addr.String(), ":") {
-			thisScheme = "ipv6"
-		}
-		if thisScheme == netboxIPScheme {
-			return false
-		}
-	}
-	return true
 }

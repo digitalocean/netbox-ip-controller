@@ -92,7 +92,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("service-%s", serviceUID),
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -180,7 +180,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("service-%s", serviceUID),
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -228,7 +228,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("service-%s", serviceUID),
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
 				Namespace: namespace,
 			},
 			Spec: v1beta1.NetBoxIPSpec{
@@ -241,7 +241,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("service-%s", serviceUID),
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -292,7 +292,7 @@ func TestReconcile(t *testing.T) {
 				APIVersion: v1beta1.SchemeGroupVersion.String(),
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("service-%s", serviceUID),
+				Name:      fmt.Sprintf("service-%s-ipv4", serviceUID),
 				Namespace: namespace,
 				Labels:    map[string]string{netboxctrl.NameLabel: name},
 				OwnerReferences: []metav1.OwnerReference{{
@@ -349,7 +349,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			var actualNetBoxIP v1beta1.NetBoxIP
-			err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: fmt.Sprintf("service-%s", serviceUID)}, &actualNetBoxIP)
+			err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: fmt.Sprintf("service-%s-ipv4", serviceUID)}, &actualNetBoxIP)
 			if err != nil && !kubeerrors.IsNotFound(err) {
 				t.Fatalf("fetching NetBoxIP: %q\n", err)
 			}
