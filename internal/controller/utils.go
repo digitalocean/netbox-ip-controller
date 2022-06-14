@@ -22,16 +22,106 @@ import (
 	"net/netip"
 	"strings"
 
+	netboxctrl "github.com/digitalocean/netbox-ip-controller"
+	netboxcrd "github.com/digitalocean/netbox-ip-controller/api/netbox"
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
+	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	log "go.uber.org/zap"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
+
+// Type IPs is used to store the NetBoxIPs belonging to a pod or service.
+// A nil value means the pod or service does not have an IP of that scheme.
+// If dual stack is not enabled, at least one of the two IPs will be nil
+type IPs struct {
+	IPv4 *v1beta1.NetBoxIP
+	IPv6 *v1beta1.NetBoxIP
+}
+
+// Type NetBoxIPData is a struct used to pass configuration parameters for
+// the NetBoxIPs created by CreateNetBoxIPs
+type NetBoxIPConfig struct {
+	Object           client.Object
+	DNSName          string
+	ReconcilerTags   []netbox.Tag
+	ReconcilerLabels map[string]bool
+}
+
+// CreateNetBoxIPs takes a slice of IP addresses in string form and creates
+// NetBoxIPs according to the configuration specified by config
+// The IP addresses are returned in the form of an IPs struct. If IPv4 or IPv6
+// is nil in the returned struct, that means no IP address of that scheme was
+// given as input
+func CreateNetBoxIPs(ips []string, config NetBoxIPConfig) (*IPs, error) {
+
+	labels := []string{fmt.Sprintf("namespace: %s", config.Object.GetNamespace())}
+	for key, value := range config.Object.GetLabels() {
+		if config.ReconcilerLabels[key] {
+			labels = append(labels, fmt.Sprintf("%s: %s", key, value))
+		}
+	}
+
+	var tags []v1beta1.Tag
+	for _, tag := range config.ReconcilerTags {
+		tags = append(tags, v1beta1.Tag{
+			Name: tag.Name,
+			Slug: tag.Slug,
+		})
+	}
+
+	var outputIPs IPs
+
+	for _, ip := range ips {
+		var addr netip.Addr
+		if ip != "" && ip != "None" {
+			var err error
+			addr, err = netip.ParseAddr(ip)
+			if err != nil {
+				return &IPs{}, fmt.Errorf("invalid IP address: %w", err)
+			}
+		} else {
+			continue
+		}
+
+		ipName := NetBoxIPName(config.Object, Scheme(addr))
+
+		netBoxIP := &v1beta1.NetBoxIP{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       netboxcrd.NetBoxIPKind,
+				APIVersion: "v1beta1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ipName,
+				Namespace: config.Object.GetNamespace(),
+				Labels: map[string]string{
+					netboxctrl.NameLabel: config.Object.GetName(),
+				},
+			},
+			Spec: v1beta1.NetBoxIPSpec{
+				Address:     addr,
+				DNSName:     config.DNSName,
+				Tags:        tags,
+				Description: strings.Join(labels, ", "),
+			},
+		}
+
+		if addr.Is4() {
+			outputIPs.IPv4 = netBoxIP
+		} else {
+			outputIPs.IPv6 = netBoxIP
+		}
+
+	}
+
+	return &outputIPs, nil
+}
 
 // NetBoxIPName derives NetBoxIP name from the object's metadata.
 // suffix may be an empty string, in which case it is ignored.
