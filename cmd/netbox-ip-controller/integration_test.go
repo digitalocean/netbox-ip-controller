@@ -137,7 +137,7 @@ func testPod(t *testing.T, env *testEnv) {
 			t.Fatalf("updating pod: %q\n", err)
 		}
 
-		netboxipName := fmt.Sprintf("pod-%s", pod.UID)
+		netboxipName := fmt.Sprintf("pod-%s-ipv4", pod.UID)
 		var netboxip *v1beta1.NetBoxIP
 		err = retry.OnError(
 			backoff1min,
@@ -215,7 +215,7 @@ func testService(t *testing.T, env *testEnv) {
 			t.Fatalf("creating service: %q\n", err)
 		}
 
-		netboxipName := fmt.Sprintf("service-%s", svc.UID)
+		netboxipName := fmt.Sprintf("service-%s-ipv4", svc.UID)
 		var netboxip *v1beta1.NetBoxIP
 		err = retry.OnError(
 			backoff1min,
@@ -236,7 +236,7 @@ func testService(t *testing.T, env *testEnv) {
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "k8s-service", Slug: "k8s-service"},
 			},
-			Description: "app: foo",
+			Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 		}
 
 		if _, err := env.WaitForIP(expectedIP); err != nil {

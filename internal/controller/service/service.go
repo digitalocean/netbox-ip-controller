@@ -180,7 +180,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 }
 
 func (r *reconciler) netboxipFromService(svc *corev1.Service, dualStack bool) ([]*v1beta1.NetBoxIP, error) {
-	var labels []string
+	labels := []string{fmt.Sprintf("namespace: %s", svc.Namespace)}
 	for key, value := range svc.Labels {
 		if r.labels[key] {
 			labels = append(labels, fmt.Sprintf("%s: %s", key, value))

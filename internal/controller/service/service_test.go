@@ -111,7 +111,7 @@ func TestReconcile(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}, {
@@ -199,7 +199,7 @@ func TestReconcile(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 		expectedNetBoxIP: nil,
@@ -260,7 +260,7 @@ func TestReconcile(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}, {
@@ -311,7 +311,7 @@ func TestReconcile(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}}
@@ -430,7 +430,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 		expectedIPv6NetBoxIP: nil,
@@ -481,7 +481,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}, {
@@ -530,7 +530,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 		expectedIPv6NetBoxIP: &v1beta1.NetBoxIP{
@@ -558,7 +558,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}, {
@@ -607,7 +607,7 @@ func TestReconcileDualStack(t *testing.T) {
 						Name: "bar",
 						Slug: "bar",
 					}},
-					Description: "app: foo",
+					Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 				},
 			},
 			{
@@ -635,7 +635,7 @@ func TestReconcileDualStack(t *testing.T) {
 						Name: "bar",
 						Slug: "bar",
 					}},
-					Description: "app: foo",
+					Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 				},
 			}},
 		expectedIPv4NetBoxIP: &v1beta1.NetBoxIP{
@@ -663,7 +663,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 		expectedIPv6NetBoxIP: nil,
@@ -713,7 +713,7 @@ func TestReconcileDualStack(t *testing.T) {
 						Name: "bar",
 						Slug: "bar",
 					}},
-					Description: "app: foo",
+					Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 				},
 			},
 			{
@@ -741,7 +741,7 @@ func TestReconcileDualStack(t *testing.T) {
 						Name: "bar",
 						Slug: "bar",
 					}},
-					Description: "app: foo",
+					Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 				},
 			}},
 		expectedIPv4NetBoxIP: nil,
@@ -770,7 +770,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}, {
@@ -819,7 +819,7 @@ func TestReconcileDualStack(t *testing.T) {
 						Name: "bar",
 						Slug: "bar",
 					}},
-					Description: "app: foo",
+					Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 				},
 			},
 			{
@@ -847,7 +847,7 @@ func TestReconcileDualStack(t *testing.T) {
 						Name: "bar",
 						Slug: "bar",
 					}},
-					Description: "app: foo",
+					Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 				},
 			}},
 		expectedIPv4NetBoxIP: &v1beta1.NetBoxIP{
@@ -875,7 +875,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 		expectedIPv6NetBoxIP: &v1beta1.NetBoxIP{
@@ -903,7 +903,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Name: "bar",
 					Slug: "bar",
 				}},
-				Description: "app: foo",
+				Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 			},
 		},
 	}}
