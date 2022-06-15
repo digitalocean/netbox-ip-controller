@@ -8,7 +8,7 @@ ENVTEST := docker.internal.digitalocean.com/platcore/envtest
 # Tag of the latest envtest image
 ENVTEST_TAG := b2d9f74c85
 
-K8S_VERSION := 1.22.5
+K8S_VERSION := 1.23.6
 ETCD_VERSION := 3.5.0
 GO_VERSION := 1.18
 
