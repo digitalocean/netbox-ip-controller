@@ -134,28 +134,12 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	// For both IPv4 and IPv6 addresses, delete the associated NetBoxIP object (if it exists)
 	// if the service no longer has an address of that scheme assigned.
-	var v4IP v1beta1.NetBoxIP
-	err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: svc.Namespace, Name: ctrl.NetBoxIPName(&svc, "ipv4")}, &v4IP)
-	if client.IgnoreNotFound(err) != nil {
-		return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
-	} else if !kubeerrors.IsNotFound(err) {
-		if ips.IPv4 == nil || svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-			if err := r.kubeClient.Delete(ctx, &v4IP); client.IgnoreNotFound(err) != nil {
-				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-			}
-		}
+	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv4, svc, "ipv4"); err != nil {
+		return reconcile.Result{}, nil
 	}
 
-	var v6IP v1beta1.NetBoxIP
-	err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: svc.Namespace, Name: ctrl.NetBoxIPName(&svc, "ipv6")}, &v6IP)
-	if client.IgnoreNotFound(err) != nil {
-		return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
-	} else if !kubeerrors.IsNotFound(err) {
-		if ips.IPv6 == nil || svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-			if err := r.kubeClient.Delete(ctx, &v6IP); client.IgnoreNotFound(err) != nil {
-				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-			}
-		}
+	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv6, svc, "ipv6"); err != nil {
+		return reconcile.Result{}, nil
 	}
 
 	return reconcile.Result{}, nil
@@ -180,4 +164,19 @@ func (r *reconciler) netboxIPsFromService(svc *corev1.Service, dualStack bool) (
 	}
 
 	return ips, nil
+}
+
+func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta1.NetBoxIP, svc corev1.Service, suffix string) error {
+	var ip v1beta1.NetBoxIP
+	err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: svc.Namespace, Name: ctrl.NetBoxIPName(&svc, suffix)}, &ip)
+	if client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("fetching NetBoxIP: %q", err)
+	} else if !kubeerrors.IsNotFound(err) {
+		if netboxip == nil || svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
+			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
+				return fmt.Errorf("deleting netboxip: %w", err)
+			}
+		}
+	}
+	return nil
 }
