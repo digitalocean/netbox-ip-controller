@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-// Type IPs is used to store the NetBoxIPs belonging to a pod or service.
+// IPs is a struct used to store the NetBoxIPs belonging to a pod or service.
 // A nil value means the pod or service does not have an IP of that scheme.
 // If dual stack is not enabled, at least one of the two IPs will be nil
 type IPs struct {
@@ -45,7 +45,7 @@ type IPs struct {
 	IPv6 *v1beta1.NetBoxIP
 }
 
-// Type NetBoxIPData is a struct used to pass configuration parameters for
+// NetBoxIPConfig is a struct used to pass configuration parameters for
 // the NetBoxIPs created by CreateNetBoxIPs
 type NetBoxIPConfig struct {
 	Object           client.Object
