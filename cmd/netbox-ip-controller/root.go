@@ -352,9 +352,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	if globalCfg.dualStackIP {
 		podCtrOpts = append(podCtrOpts, ctrl.WithDualStackIP())
 	}
-	podController, err := podctrl.New(
-		podCtrOpts...,
-	)
+	podController, err := podctrl.New(podCtrOpts...)
 	if err != nil {
 		return fmt.Errorf("initializing pod controller: %s", err)
 	}
@@ -368,9 +366,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	if globalCfg.dualStackIP {
 		svcCtrOpts = append(svcCtrOpts, ctrl.WithDualStackIP())
 	}
-	svcController, err := svcctrl.New(
-		svcCtrOpts...,
-	)
+	svcController, err := svcctrl.New(svcCtrOpts...)
 	if err != nil {
 		return fmt.Errorf("initializing service controller: %s", err)
 	}
