@@ -135,28 +135,12 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	// For both IPv4 and IPv6 addresses, delete the associated NetBoxIP object (if it exists) if the Pod
 	// no longer has an address of that scheme assigned, or if the pod has entered a succeeded or failed phase.
 	// This is because if the pod has entered a completed phase, its IP may be re-used by another pod.
-	var v4IP v1beta1.NetBoxIP
-	err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv4")}, &v4IP)
-	if client.IgnoreNotFound(err) != nil {
-		return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
-	} else if !kubeerrors.IsNotFound(err) {
-		if ips.IPv4 == nil || pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-			if err := r.kubeClient.Delete(ctx, &v4IP); client.IgnoreNotFound(err) != nil {
-				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-			}
-		}
+	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv4, pod, "ipv4"); err != nil {
+		return reconcile.Result{}, nil
 	}
 
-	var v6IP v1beta1.NetBoxIP
-	err = r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, "ipv6")}, &v6IP)
-	if client.IgnoreNotFound(err) != nil {
-		return reconcile.Result{}, fmt.Errorf("fetching NetBoxIP: %q", err)
-	} else if !kubeerrors.IsNotFound(err) {
-		if ips.IPv6 == nil || pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-			if err := r.kubeClient.Delete(ctx, &v6IP); client.IgnoreNotFound(err) != nil {
-				return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
-			}
-		}
+	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv6, pod, "ipv6"); err != nil {
+		return reconcile.Result{}, nil
 	}
 
 	return reconcile.Result{}, nil
@@ -183,4 +167,19 @@ func (r *reconciler) netboxIPsFromPod(pod *corev1.Pod, dualStack bool) (*ctrl.IP
 	}
 
 	return ips, nil
+}
+
+func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta1.NetBoxIP, pod corev1.Pod, suffix string) error {
+	var ip v1beta1.NetBoxIP
+	err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: pod.Namespace, Name: ctrl.NetBoxIPName(&pod, suffix)}, &ip)
+	if client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("fetching NetBoxIP: %q", err)
+	} else if !kubeerrors.IsNotFound(err) {
+		if netboxip == nil || pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
+				return fmt.Errorf("deleting netboxip: %w", err)
+			}
+		}
+	}
+	return nil
 }
