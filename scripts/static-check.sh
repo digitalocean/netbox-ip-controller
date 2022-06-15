@@ -1,6 +1,6 @@
 #!/bin/bash
 
-check=$(staticcheck ./... | grep -v "vendor/" )
+check=$(staticcheck -checks=inherit,ST1020,ST1021,ST1022 ./... | grep -v "vendor/" )
 
 if [[ -n $check ]]; then
     echo "static check issues found"

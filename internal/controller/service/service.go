@@ -19,18 +19,14 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/netip"
-	"strings"
 
-	netboxctrl "github.com/digitalocean/netbox-ip-controller"
-	netboxcrd "github.com/digitalocean/netbox-ip-controller/api/netbox"
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -61,6 +57,7 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 			labels:        s.Labels,
 			clusterDomain: s.ClusterDomain,
 			log:           logger.With(log.String("reconciler", "service")),
+			dualStackIP:   s.DualStackIP,
 		},
 	}, nil
 }
@@ -81,6 +78,7 @@ type reconciler struct {
 	labels        map[string]bool
 	clusterDomain string
 	log           *log.Logger
+	dualStackIP   bool
 }
 
 // InjectClient injects the client and implements inject.Client.
@@ -111,74 +109,74 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	ip, err := r.netboxipFromService(&svc)
+	// ips is a slice to support dual stack IP addresses. If r.dualStackIP is false, ips will
+	// always be a slice with 1 element
+	ips, err := r.netboxIPsFromService(&svc, r.dualStackIP)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	if err := ctrl.DeclareOwner(ip, &svc); err != nil {
-		return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
-	}
 
-	// in addition to ClusterIP type services, LoadBalancer and NodePort
-	// also have an underlying ClusterIP; we're not publishing external IPs
-	// for such services though
-	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-		// ClusterIP may be changed to "" when service type is changed to ExternalName;
-		// "None" corresponds to a headless service
-		if err := r.kubeClient.Delete(ctx, ip); client.IgnoreNotFound(err) != nil {
-			return reconcile.Result{}, fmt.Errorf("deleting netboxip: %w", err)
+	for _, ip := range []*v1beta1.NetBoxIP{ips.IPv4, ips.IPv6} {
+		if ip == nil {
+			continue
 		}
 
+		if err := ctrl.DeclareOwner(ip, &svc); err != nil {
+			return reconcile.Result{}, fmt.Errorf("setting owner: %w", err)
+		}
+
+		err = ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+	}
+
+	// For both IPv4 and IPv6 addresses, delete the associated NetBoxIP object (if it exists)
+	// if the service no longer has an address of that scheme assigned.
+	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv4, svc, "ipv4"); err != nil {
 		return reconcile.Result{}, nil
 	}
 
-	return reconcile.Result{}, ctrl.UpsertNetBoxIP(ctx, r.kubeClient, ll, ip)
+	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv6, svc, "ipv6"); err != nil {
+		return reconcile.Result{}, nil
+	}
+
+	return reconcile.Result{}, nil
 }
 
-func (r *reconciler) netboxipFromService(svc *corev1.Service) (*v1beta1.NetBoxIP, error) {
-	var labels []string
-	for key, value := range svc.Labels {
-		if r.labels[key] {
-			labels = append(labels, fmt.Sprintf("%s: %s", key, value))
+func (r *reconciler) netboxIPsFromService(svc *corev1.Service, dualStack bool) (*ctrl.IPs, error) {
+	var svcIPs []string
+	if dualStack {
+		svcIPs = svc.Spec.ClusterIPs
+	} else {
+		svcIPs = []string{svc.Spec.ClusterIP}
+	}
+
+	ips, err := ctrl.CreateNetBoxIPs(svcIPs, ctrl.NetBoxIPConfig{
+		Object:           svc,
+		DNSName:          fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, r.clusterDomain),
+		ReconcilerTags:   r.tags,
+		ReconcilerLabels: r.labels,
+	})
+	if err != nil {
+		return &ctrl.IPs{}, err
+	}
+
+	return ips, nil
+}
+
+func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta1.NetBoxIP, svc corev1.Service, suffix string) error {
+	var ip v1beta1.NetBoxIP
+	err := r.kubeClient.Get(context.Background(), client.ObjectKey{Namespace: svc.Namespace, Name: ctrl.NetBoxIPName(&svc, suffix)}, &ip)
+	if client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("fetching NetBoxIP: %q", err)
+	} else if !kubeerrors.IsNotFound(err) {
+		if netboxip == nil || svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
+			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
+				return fmt.Errorf("deleting netboxip: %w", err)
+			}
 		}
 	}
-
-	var tags []v1beta1.Tag
-	for _, tag := range r.tags {
-		tags = append(tags, v1beta1.Tag{
-			Name: tag.Name,
-			Slug: tag.Slug,
-		})
-	}
-
-	var addr netip.Addr
-	if svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None" {
-		var err error
-		addr, err = netip.ParseAddr(svc.Spec.ClusterIP)
-		if err != nil {
-			return nil, fmt.Errorf("invalid IP address: %w", err)
-		}
-	}
-
-	ip := &v1beta1.NetBoxIP{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       netboxcrd.NetBoxIPKind,
-			APIVersion: "v1beta1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ctrl.NetBoxIPName(svc),
-			Namespace: svc.Namespace,
-			Labels: map[string]string{
-				netboxctrl.NameLabel: svc.Name,
-			},
-		},
-		Spec: v1beta1.NetBoxIPSpec{
-			Address:     addr,
-			DNSName:     fmt.Sprintf("%s.%s.svc.%s", svc.Name, svc.Namespace, r.clusterDomain),
-			Tags:        tags,
-			Description: strings.Join(labels, ", "),
-		},
-	}
-
-	return ip, nil
+	return nil
 }

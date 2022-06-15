@@ -41,6 +41,7 @@ type Settings struct {
 	Labels        map[string]bool
 	ClusterDomain string
 	Logger        *log.Logger
+	DualStackIP   bool
 }
 
 // Option can be used to tune controller settings.
@@ -114,6 +115,15 @@ func WithNetBoxClient(client netbox.Client) Option {
 func WithClusterDomain(domain string) Option {
 	return func(s *Settings) error {
 		s.ClusterDomain = domain
+		return nil
+	}
+}
+
+// WithDualStackIP enables registering both IPv6 and IPv4 address in netbox
+// for dual stack pods and services.
+func WithDualStackIP() Option {
+	return func(s *Settings) error {
+		s.DualStackIP = true
 		return nil
 	}
 }

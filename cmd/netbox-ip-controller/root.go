@@ -60,6 +60,7 @@ const (
 	flagClusterDomain        = "cluster-domain"
 	flagDebug                = "debug"
 	flagNetboxCACertPath     = "netbox-ca-cert-path"
+	flagDualStackIP          = "dual-stack-ip"
 )
 
 type globalConfig struct {
@@ -70,6 +71,7 @@ type globalConfig struct {
 	netboxBurst      int
 	logger           *log.Logger
 	netboxCACertPath string
+	dualStackIP      bool
 }
 
 var globalCfg = &globalConfig{}
@@ -122,6 +124,7 @@ func registerGlobalFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int(flagNetBoxBurst, 1, "maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size")
 	cmd.PersistentFlags().Bool(flagDebug, false, "turn on debug logging")
 	cmd.PersistentFlags().String(flagNetboxCACertPath, "", "absolute path to a file containing a PEM-encoded root certificate to verify NetBox server's certificate")
+	cmd.PersistentFlags().Bool(flagDualStackIP, false, "if true, both IPv4 and IPv6 addresses will be registered in netbox for dual stack pods and services")
 }
 
 // register flags relevant for the root command itself, but not its children
@@ -160,6 +163,7 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	cfg.netboxQPS = rate.Limit(v.GetFloat64(flagNetBoxQPS))
 	cfg.netboxBurst = v.GetInt(flagNetBoxBurst)
 	cfg.netboxCACertPath = v.GetString(flagNetboxCACertPath)
+	cfg.dualStackIP = v.GetBool(flagDualStackIP)
 
 	err = cfg.validate()
 	if err != nil {
@@ -340,22 +344,29 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 	controllers["netboxip"] = netboxController
 
-	podController, err := podctrl.New(
+	podCtrOpts := []ctrl.Option{
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.podTags, netboxClient),
 		ctrl.WithLabels(cfg.podLabels),
-	)
+	}
+	if globalCfg.dualStackIP {
+		podCtrOpts = append(podCtrOpts, ctrl.WithDualStackIP())
+	}
+	podController, err := podctrl.New(podCtrOpts...)
 	if err != nil {
 		return fmt.Errorf("initializing pod controller: %s", err)
 	}
 	controllers["pod"] = podController
-
-	svcController, err := svcctrl.New(
+	svcCtrOpts := []ctrl.Option{
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.serviceTags, netboxClient),
 		ctrl.WithLabels(cfg.serviceLabels),
 		ctrl.WithClusterDomain(cfg.clusterDomain),
-	)
+	}
+	if globalCfg.dualStackIP {
+		svcCtrOpts = append(svcCtrOpts, ctrl.WithDualStackIP())
+	}
+	svcController, err := svcctrl.New(svcCtrOpts...)
 	if err != nil {
 		return fmt.Errorf("initializing service controller: %s", err)
 	}
