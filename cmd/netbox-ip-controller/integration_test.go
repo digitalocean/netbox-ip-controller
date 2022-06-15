@@ -236,7 +236,7 @@ func testService(t *testing.T, env *testEnv) {
 				{Name: "kubernetes", Slug: "kubernetes"},
 				{Name: "k8s-service", Slug: "k8s-service"},
 			},
-			Description: "app: foo",
+			Description: fmt.Sprintf("namespace: %s, app: foo", namespace),
 		}
 
 		if _, err := env.WaitForIP(expectedIP); err != nil {
