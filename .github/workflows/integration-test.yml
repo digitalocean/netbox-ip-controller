@@ -18,7 +18,7 @@ jobs:
 
     env:
       # TODO: CHANGE TO A PUBLIC REGISTRY
-      TEST_IMAGE: "docker.internal.digitalocean.com/platcore/envtest:b2d9f74c85"
+      TEST_IMAGE: "docker.internal.digitalocean.com/platcore/envtest:432af51079"
 
     steps:
 
