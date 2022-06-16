@@ -2,11 +2,10 @@ GITCOMMIT := $(shell git rev-parse --short=10 HEAD 2>/dev/null)
 GITCOMMIT_LONG := $(shell git rev-parse HEAD 2>/dev/null)
 NAME := netbox-ip-controller
 IMAGE := "${NAME}:$(GITCOMMIT)"
-# Path to envtest image
-# TODO: CHANGE TO A PUBLIC REGISTRY
-ENVTEST := docker.internal.digitalocean.com/platcore/envtest
-# Tag of the latest envtest image
-ENVTEST_TAG := b2d9f74c85
+# Path to k8s-env-test image on Docker Hub
+ENVTEST := digitalocean/k8s-env-test
+# Tag of the latest k8s-env-test image
+ENVTEST_TAG := a1c0ee7278
 
 K8S_VERSION := 1.23.6
 ETCD_VERSION := 3.5.0
@@ -59,6 +58,10 @@ crd:
 envtest-image:
 	docker build --build-arg GO_VERSION=$(GO_VERSION) --build-arg K8S_VERSION=$(K8S_VERSION) --build-arg ETCD_VERSION=$(ETCD_VERSION) -t "$(ENVTEST):$(GITCOMMIT)" ./test
 
+.PHONY: get-envtest-image-tag
+get-envtest-image-tag:
+	echo ${ENVTEST}:${ENVTEST_TAG}
+	
 .PHONY:
 integration-test:
 	TEST_IMAGE=${ENVTEST}:${ENVTEST_TAG} ./local/local-integration-test.sh all 
