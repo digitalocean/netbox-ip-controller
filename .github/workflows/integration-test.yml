@@ -16,10 +16,6 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
 
-    env:
-      # TODO: CHANGE TO A PUBLIC REGISTRY
-      TEST_IMAGE: "docker.internal.digitalocean.com/platcore/envtest:432af51079"
-
     steps:
 
     - name: Set up Go
@@ -31,6 +27,14 @@ jobs:
       uses: actions/checkout@v2
       with:
         fetch-depth: '0'
+
+    - name: Get testenv image tag 
+      run : |
+        export TEST_IMAGE="$(make get-envtest-image-tag -s)"
+        echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
+        
+    - name: Log into container registry
+      run : echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin
 
     # Build a new testenv image to use if and only if the Dockerfile or Makefile is changed in this PR
     - name: Build image
