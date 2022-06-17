@@ -1,11 +1,25 @@
+# Copyright 2022 DigitalOcean
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+# 
+# http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 GITCOMMIT := $(shell git rev-parse --short=10 HEAD 2>/dev/null)
 GITCOMMIT_LONG := $(shell git rev-parse HEAD 2>/dev/null)
 NAME := netbox-ip-controller
 IMAGE := "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
-# Digest of the latest envtest image
-ENVTEST_DIGEST := sha256:eea3fd27b7694408915be3686d3f55f69846327e921be9a5b3f93cdaa988f4a2
+# Digest of the currently used envtest image
+ENVTEST_DIGEST := sha256:5e89ba1def5fb4802bc9e83e81d1b2f5f484eb09189d2487eb2e500e92f21dff
 
 K8S_VERSION := 1.23.6
 ETCD_VERSION := 3.5.0
