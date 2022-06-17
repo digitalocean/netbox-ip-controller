@@ -5,7 +5,7 @@ IMAGE := "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
 # Tag of the latest k8s-env-test image
-ENVTEST_TAG := a1c0ee7278
+ENVTEST_TAG := efcef6fcad
 
 K8S_VERSION := 1.23.6
 ETCD_VERSION := 3.5.0
