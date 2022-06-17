@@ -24,7 +24,10 @@ jobs:
     - name: Checkout current branch
       uses: actions/checkout@v2
 
-    - name: Build image
+    - name: Log into container registry
+      run : docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
+
+    - name: Build and release image
       run : |
         make envtest-image
         docker push $(docker images --format {{.Repository}}:{{.Tag}} | head -n1)
