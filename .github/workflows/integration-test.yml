@@ -34,7 +34,7 @@ jobs:
         echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
         
     - name: Log into container registry
-      run : echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin
+      run :  docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
 
     # Build a new testenv image to use if and only if the Dockerfile or Makefile is changed in this PR
     - name: Build image

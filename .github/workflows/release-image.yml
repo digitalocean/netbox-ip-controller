@@ -25,7 +25,7 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Log into container registry
-      run : echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin
+      run : docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
 
     - name: Build and release image
       run : |
