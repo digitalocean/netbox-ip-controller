@@ -31,7 +31,7 @@ jobs:
     - name: Get testenv image tag 
       run : |
         export TEST_IMAGE="$(make get-envtest-image-tag -s)"
-        echo "TEST_IMAGE=$TEST_IMAGE" >> $GITHUB_ENV
+        echo "TEST_IMAGE=${TEST_IMAGE}" >> ${GITHUB_ENV}
         
     - name: Log into container registry
       run :  docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
