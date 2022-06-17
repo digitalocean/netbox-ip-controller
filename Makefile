@@ -4,8 +4,8 @@ NAME := netbox-ip-controller
 IMAGE := "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
-# Tag of the latest k8s-env-test image
-ENVTEST_TAG := efcef6fcad
+# Digest of the latest envtest image
+ENVTEST_DIGEST := sha256:eea3fd27b7694408915be3686d3f55f69846327e921be9a5b3f93cdaa988f4a2
 
 K8S_VERSION := 1.23.6
 ETCD_VERSION := 3.5.0
@@ -60,11 +60,11 @@ envtest-image:
 
 .PHONY: get-envtest-image-tag
 get-envtest-image-tag:
-	echo ${ENVTEST}:${ENVTEST_TAG}
+	echo ${ENVTEST}:${ENVTEST_DIGEST}
 	
 .PHONY:
 integration-test:
-	TEST_IMAGE=${ENVTEST}:${ENVTEST_TAG} ./local/local-integration-test.sh all 
+	TEST_IMAGE=${ENVTEST}@${ENVTEST_DIGEST} ./local/local-integration-test.sh all 
 
 .PHONY:
 setup: 
@@ -72,7 +72,7 @@ setup:
 
 .PHONY:
 execute:
-	TEST_IMAGE=${ENVTEST}:${ENVTEST_TAG} ./local/local-integration-test.sh execute
+	TEST_IMAGE=${ENVTEST}@${ENVTEST_DIGEST} ./local/local-integration-test.sh execute
 
 .PHONY:
 cleanup:
