@@ -18,7 +18,7 @@ NAME := netbox-ip-controller
 IMAGE := "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
-# Digest of the latest envtest image
+# Digest of the currently used envtest image
 ENVTEST_DIGEST := sha256:5e89ba1def5fb4802bc9e83e81d1b2f5f484eb09189d2487eb2e500e92f21dff
 
 K8S_VERSION := 1.23.6
