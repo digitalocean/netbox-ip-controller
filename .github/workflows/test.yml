@@ -26,7 +26,7 @@ jobs:
     strategy:
       matrix:
         go-version: [1.18.2]
-        platform: [Linux]
+        platform: [ubuntu-20.04]
     env:
       GOPATH: "/runner/_work/go"
 
