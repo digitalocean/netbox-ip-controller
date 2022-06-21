@@ -18,7 +18,7 @@ name: Build envtest image
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - "test/**"
       - "Makefile"
@@ -29,7 +29,7 @@ jobs:
     name: Build and release image
     strategy:
       matrix:
-        platform: [Linux]
+        platform: [ubuntu-20.04]
 
     runs-on: ${{ matrix.platform }}
 

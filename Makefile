@@ -74,7 +74,7 @@ envtest-image:
 
 .PHONY: get-envtest-image-tag
 get-envtest-image-tag:
-	echo ${ENVTEST}:${ENVTEST_DIGEST}
+	echo ${ENVTEST}@${ENVTEST_DIGEST}
 	
 .PHONY:
 integration-test:
