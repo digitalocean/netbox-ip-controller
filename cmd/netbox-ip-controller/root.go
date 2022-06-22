@@ -47,6 +47,7 @@ import (
 
 const (
 	flagMetricsAddr          = "metrics-addr"
+	flagReadyCheckAddr       = "ready-check-addr"
 	flagNetBoxAPIURL         = "netbox-api-url"
 	flagNetBoxToken          = "netbox-token"
 	flagKubeConfig           = "kube-config"
@@ -78,16 +79,14 @@ type globalConfig struct {
 var globalCfg = &globalConfig{}
 
 type rootConfig struct {
-	metricsAddr   string
-	podTags       []string
-	serviceTags   []string
-	podLabels     map[string]bool
-	serviceLabels map[string]bool
-	clusterDomain string
+	metricsAddr    string
+	readyCheckAddr string
+	podTags        []string
+	serviceTags    []string
+	podLabels      map[string]bool
+	serviceLabels  map[string]bool
+	clusterDomain  string
 }
-
-// Port to serve readiness check on (used for integration testing only)
-const readyProbePort = 5001
 
 func newRootCommand() *cobra.Command {
 	cfg := &rootConfig{}
@@ -133,13 +132,13 @@ func registerGlobalFlags(cmd *cobra.Command) {
 
 // register flags relevant for the root command itself, but not its children
 func registerRootFlags(cmd *cobra.Command) {
-	cmd.Flags().String(flagMetricsAddr, ":8001", "the port on which to serve metrics")
+	cmd.Flags().String(flagMetricsAddr, ":8001", "the address on which to serve metrics")
 	cmd.Flags().String(flagPodIPTags, "kubernetes,k8s-pod", "comma-separated list of tags to add to pod IPs in NetBox")
 	cmd.Flags().String(flagServiceIPTags, "kubernetes,k8s-service", "comma-separated list of tags to add to service IPs in NetBox")
 	cmd.Flags().String(flagPodPublishLabels, "app", "comma-separated list of pod labels that should be added to the IP description in NetBox")
 	cmd.Flags().String(flagServicePublishLabels, "app", "comma-separated list of service labels that should be added to the IP description in NetBox")
 	cmd.Flags().String(flagClusterDomain, "cluster.local", "domain name of the cluster")
-
+	cmd.Flags().String(flagReadyCheckAddr, ":5001", "address for the controller manager to serve a readiness check endpoint on")
 }
 
 func (cfg *globalConfig) setup(cmd *cobra.Command) error {
@@ -231,6 +230,7 @@ func (cfg *rootConfig) setup(cmd *cobra.Command) error {
 
 	cfg.metricsAddr = v.GetString(flagMetricsAddr)
 	cfg.clusterDomain = v.GetString(flagClusterDomain)
+	cfg.readyCheckAddr = v.GetString(flagReadyCheckAddr)
 
 	cfg.podTags = sanitizedStringSlice(v.GetString(flagPodIPTags))
 	cfg.serviceTags = sanitizedStringSlice(v.GetString(flagServiceIPTags))
@@ -334,15 +334,15 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 		Scheme:                 scheme,
 		Logger:                 zapr.NewLogger(logger.Named("netbox-ip-controller")),
 		MetricsBindAddress:     cfg.metricsAddr,
-		HealthProbeBindAddress: fmt.Sprintf(":%d", readyProbePort),
+		HealthProbeBindAddress: cfg.readyCheckAddr,
 	})
 
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
 	}
 
-	// This ready check exists only for integration tests. The checker always responds
-	// with ready because all we need to know is that the manager has started.
+	// The ready check endpoint always responds with ready and serves as a simple
+	// indicator of whether or not the controller manager has been started yet.
 	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return fmt.Errorf("unable to add readiness check: %s", err)
 	}

@@ -599,11 +599,12 @@ func newTestEnvWithController(ctx context.Context, t *testing.T) (*testEnv, erro
 		logger:       logger,
 	}
 	cfg := &rootConfig{
-		podTags:       []string{"kubernetes", "k8s-pod"},
-		podLabels:     map[string]bool{"app": true},
-		serviceTags:   []string{"kubernetes", "k8s-service"},
-		serviceLabels: map[string]bool{"app": true},
-		clusterDomain: "cluster.local",
+		podTags:        []string{"kubernetes", "k8s-pod"},
+		podLabels:      map[string]bool{"app": true},
+		serviceTags:    []string{"kubernetes", "k8s-service"},
+		serviceLabels:  map[string]bool{"app": true},
+		clusterDomain:  "cluster.local",
+		readyCheckAddr: ":5001",
 	}
 	go func() {
 		defer env.Stop()
@@ -612,7 +613,7 @@ func newTestEnvWithController(ctx context.Context, t *testing.T) (*testEnv, erro
 		}
 	}()
 
-	if err = waitForController(3 * time.Minute); err != nil {
+	if err = waitForController(3*time.Minute, cfg.readyCheckAddr); err != nil {
 		return nil, err
 	}
 
@@ -620,8 +621,8 @@ func newTestEnvWithController(ctx context.Context, t *testing.T) (*testEnv, erro
 }
 
 // waitForController blocks until the controller manager is ready
-func waitForController(timeout time.Duration) error {
-	url := fmt.Sprintf("http://127.0.0.1:%d/readyz", readyProbePort)
+func waitForController(timeout time.Duration, addr string) error {
+	url := fmt.Sprintf("http://127.0.0.1%s/readyz", addr)
 
 	return retry.OnError(
 		wait.Backoff{
