@@ -40,6 +40,7 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
@@ -84,6 +85,9 @@ type rootConfig struct {
 	serviceLabels map[string]bool
 	clusterDomain string
 }
+
+// Port to serve readiness check on (used for integration testing only)
+const readyProbePort = 5001
 
 func newRootCommand() *cobra.Command {
 	cfg := &rootConfig{}
@@ -327,13 +331,22 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 
 	mgr, err := manager.New(globalCfg.kubeConfig, manager.Options{
-		Scheme:             scheme,
-		Logger:             zapr.NewLogger(logger.Named("netbox-ip-controller")),
-		MetricsBindAddress: cfg.metricsAddr,
+		Scheme:                 scheme,
+		Logger:                 zapr.NewLogger(logger.Named("netbox-ip-controller")),
+		MetricsBindAddress:     cfg.metricsAddr,
+		HealthProbeBindAddress: fmt.Sprintf(":%d", readyProbePort),
 	})
+
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
 	}
+
+	// This ready check exists only for integration tests. The checker always responds
+	// with ready because all we need to know is that the manager has started.
+	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return fmt.Errorf("unable to add readiness check: %s", err)
+	}
+
 	logger.Info("created manager")
 
 	controllers := make(map[string]ctrl.Controller)
