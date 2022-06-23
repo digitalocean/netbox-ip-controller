@@ -62,10 +62,15 @@ func clean(ctx context.Context, cfg *globalConfig) error {
 		return fmt.Errorf("creating k8s client: %w", err)
 	}
 
-	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken,
-		netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst),
+	netboxClientOpts := []netbox.ClientOption{
+		netbox.WithRateLimiter(globalCfg.netboxQPS, cfg.netboxBurst),
 		netbox.WithLogger(cfg.logger),
-	)
+	}
+	if cfg.netboxCACertPath != "" {
+		netboxClientOpts = append(netboxClientOpts, netbox.WithCARootCert(cfg.netboxCACertPath))
+	}
+
+	netboxClient, err := netbox.NewClient(cfg.netboxAPIURL, cfg.netboxToken, netboxClientOpts...)
 	if err != nil {
 		return fmt.Errorf("creating netbox client: %w", err)
 	}
