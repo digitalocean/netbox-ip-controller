@@ -143,7 +143,7 @@ func (cfg *globalConfig) setup(cmd *cobra.Command) error {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
-	if err := v.BindPFlags(cmd.PersistentFlags()); err != nil {
+	if err := v.BindPFlags(cmd.Flags()); err != nil {
 		return fmt.Errorf("binding flags: %w", err)
 	}
 
