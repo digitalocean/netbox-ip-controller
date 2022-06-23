@@ -81,10 +81,9 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	}
 
 	c := &client{
-		httpClient: retryableHTTPClient(5),
-		baseURL:    strings.TrimSuffix(u.String(), "/"),
-		token:      apiToken,
-		logger:     log.L(),
+		baseURL: strings.TrimSuffix(u.String(), "/"),
+		token:   apiToken,
+		logger:  log.L(),
 	}
 
 	for _, opt := range opts {
@@ -92,6 +91,8 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 			return nil, err
 		}
 	}
+
+	c.setRetryableHTTPClient(5)
 
 	if c.rateLimiter == nil {
 		c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
@@ -154,10 +155,14 @@ func parseAndValidateURL(apiURL string) (*url.URL, error) {
 	return u, nil
 }
 
-func retryableHTTPClient(retryMax int) *retryablehttp.Client {
+func (c *client) setRetryableHTTPClient(retryMax int) {
 	// add retries on 50X errors
 	retryClient := retryablehttp.NewClient()
 	retryClient.RetryMax = retryMax
+	if c.logger != nil {
+		retryClient.Logger = newRetryableHTTPLogger(c.logger)
+	}
+
 	retryClient.CheckRetry = func(ctx context.Context, res *http.Response, err error) (bool, error) {
 		if err == nil {
 			// do not retry non-idempotent requests
@@ -169,7 +174,7 @@ func retryableHTTPClient(retryMax int) *retryablehttp.Client {
 		return retryablehttp.DefaultRetryPolicy(ctx, res, err)
 	}
 
-	return retryClient
+	c.httpClient = retryClient
 }
 
 // NOTE: trailing "/" is required for endpoints that work with a single object ID
