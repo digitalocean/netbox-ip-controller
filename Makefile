@@ -15,7 +15,7 @@
 GITCOMMIT := $(shell git rev-parse --short=10 HEAD 2>/dev/null)
 GITCOMMIT_LONG := $(shell git rev-parse HEAD 2>/dev/null)
 NAME := netbox-ip-controller
-IMAGE := "${NAME}:$(GITCOMMIT)"
+IMAGE ?= "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
 # Digest of the currently used envtest image
