@@ -38,8 +38,11 @@ jobs:
     - name: Checkout current branch
       uses: actions/checkout@v2
 
-    - name: Log into container registry
-      run : docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
+    - name: Log in to the Docker Hub
+      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      with:
+        username: ${{ secrets.DOCKER_HUB_USER }} 
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
     - name: Build and release image
       run : |
