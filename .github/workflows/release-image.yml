@@ -12,38 +12,63 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Build envtest image
+# When a new release is created, build and push the Docker image
+name: Create and publish Docker image
 
-# Run when a PR that makes an edit to test directory or the Makefile is merged with master
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "test/**"
-      - "Makefile"
+  release:
+    types: [published]
 
-jobs: 
+env:
+  GITHUB_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG: ${{ github.event.release.tag_name }}
 
+jobs:
   build_image:
     name: Build and release image
     strategy:
       matrix:
+        go-version: [1.18.2]
         platform: [ubuntu-20.04]
 
     runs-on: ${{ matrix.platform }}
 
     steps:
 
-    - name: Checkout current branch
-      uses: actions/checkout@v2
+      - name: Checkout current branch
+        uses: actions/checkout@v2
+      
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
 
-    - name: Log into container registry
-      run : docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
+      - name: Build image
+        run : IMAGE=${{ env.IMAGE_NAME }} make build-image
 
-    - name: Build and release image
-      run : |
-        make envtest-image
-        docker push $(docker images --format {{.Repository}}:{{.Tag}} | head -n1)
-  
-  
+      - name: Log in to the GitHub registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ${{ env.GITHUB_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to GitHub registry
+        run : |
+              export GITHUB_TAG=${{ env.GITHUB_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+              docker tag ${{ env.IMAGE_NAME }} $GITHUB_TAG
+              docker push $GITHUB_TAG
+
+      - name: Log in to the Docker Hub
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }} 
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Push to Docker Hub
+        run : |
+              export DOCKER_TAG=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+              docker tag ${{ env.IMAGE_NAME }} $DOCKER_TAG
+              docker push $DOCKER_TAG
+     
