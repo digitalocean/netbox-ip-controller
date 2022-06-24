@@ -19,13 +19,14 @@ with dashes (`-`) replaced with underscores (`_`).
 `kube-burst` | `30` | Maximum number of requests to the kube-apiserver allowed to accumulate before throttling begins. Optional.
 `netbox-qps` | `100` | Average allowable requests per second to NetBox API, i.e., the rate limiter's token bucket refill rate per second
 `netbox-burst` | `1` | Maximum allowable burst of requests to NetBox API, i.e. the rate limiter's token bucket size
-`metrics-addr` | `:8001` | Sets the address to serve metrics on. Optional.
+`metrics-addr` | `:8001` | Sets the address that the controller will bind to for serving metrics. Can be a full TCP address or only a port (e.g. `:8081`). Optional.
 `cluster-domain` | `cluster.local` | Domain name of the cluster. Optional.
 `pod-ip-tags` | `kubernetes,k8s-pod` | Comma-separated list of tags to add to pod IPs in NetBox. Any tags that don't yet exist will be created. Optional.
 `service-ip-tags` | `kubernetes,k8s-service` | Comma-separated list of tags to add to service IPs in NetBox. Any tags that don't yet exist will be created. Optional.
 `pod-publish-labels` | `app` | Comma-separated list of kubernetes pod labels to be added to the IP description in NetBox in `label: label_value` format. Optional. 
 `service-publish-labels` | `app` | Comma-separated list of kubernetes service labels to be added to the IP description in NetBox in `label: label_value` format. Optional. 
 `dual-stack-ip` | `false` | Enables registering both IPv4 and IPv6 addresses of pods and services where applicable in dual stack clusters. Optional.
+`ready-check-addr` | `:5001` | Sets the address that the controller manager will bind to for serving the ready check endpoint. Can be a full TCP address or only a port (e.g. `:5001`). Optional. 
 `debug` | `false` | Turns on debug logging. Optional.
 
 ## Running locally

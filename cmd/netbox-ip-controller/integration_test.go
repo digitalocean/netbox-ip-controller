@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/netip"
 	"os"
 	"testing"
@@ -61,7 +62,8 @@ var (
 		Factor:   1,
 		Steps:    20,
 	}
-	logger = zap.L()
+	errBadReadyResponse = errors.New("probing ready check endpoint got response status")
+	logger              = zap.L()
 )
 
 func TestMain(m *testing.M) {
@@ -597,11 +599,12 @@ func newTestEnvWithController(ctx context.Context, t *testing.T) (*testEnv, erro
 		logger:       logger,
 	}
 	cfg := &rootConfig{
-		podTags:       []string{"kubernetes", "k8s-pod"},
-		podLabels:     map[string]bool{"app": true},
-		serviceTags:   []string{"kubernetes", "k8s-service"},
-		serviceLabels: map[string]bool{"app": true},
-		clusterDomain: "cluster.local",
+		podTags:        []string{"kubernetes", "k8s-pod"},
+		podLabels:      map[string]bool{"app": true},
+		serviceTags:    []string{"kubernetes", "k8s-service"},
+		serviceLabels:  map[string]bool{"app": true},
+		clusterDomain:  "cluster.local",
+		readyCheckAddr: ":5001",
 	}
 	go func() {
 		defer env.Stop()
@@ -610,5 +613,35 @@ func newTestEnvWithController(ctx context.Context, t *testing.T) (*testEnv, erro
 		}
 	}()
 
+	if err = waitForController(3*time.Minute, cfg.readyCheckAddr); err != nil {
+		return nil, err
+	}
+
 	return env, nil
+}
+
+// waitForController blocks until the controller manager is ready
+func waitForController(timeout time.Duration, addr string) error {
+	url := fmt.Sprintf("http://127.0.0.1%s/readyz", addr)
+
+	return retry.OnError(
+		wait.Backoff{
+			Duration: time.Second,
+			Factor:   1,
+			Steps:    int(timeout.Seconds()),
+		},
+		func(err error) bool {
+			return !errors.Is(err, errBadReadyResponse)
+		},
+		func() error {
+			resp, err := http.Get(url)
+			if err != nil {
+				return err
+			}
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("%w: %d", errBadReadyResponse, resp.StatusCode)
+			}
+			return nil
+		},
+	)
 }
