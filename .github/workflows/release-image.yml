@@ -1,0 +1,74 @@
+# Copyright 2022 DigitalOcean
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+# 
+# http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# When a new release is created, build and push the Docker image
+name: Create and publish Docker image
+
+on:
+  release:
+    types: [published]
+
+env:
+  GITHUB_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG: ${{ github.event.release.tag_name }}
+
+jobs:
+  build_image:
+    name: Build and release image
+    strategy:
+      matrix:
+        go-version: [1.18.2]
+        platform: [ubuntu-20.04]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+
+      - name: Checkout current branch
+        uses: actions/checkout@v2
+      
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Build image
+        run : IMAGE=${{ env.IMAGE_NAME }} make build-image
+
+      - name: Log in to the GitHub registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ${{ env.GITHUB_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to GitHub registry
+        run : |
+              export GITHUB_TAG=${{ env.GITHUB_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+              docker tag ${{ env.IMAGE_NAME }} $GITHUB_TAG
+              docker push $GITHUB_TAG
+
+      - name: Log in to the Docker Hub
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }} 
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Push to Docker Hub
+        run : |
+              export DOCKER_TAG=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+              docker tag ${{ env.IMAGE_NAME }} $DOCKER_TAG
+              docker push $DOCKER_TAG
+     
