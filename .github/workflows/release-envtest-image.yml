@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Build envtest image
+name: Build and push envtest image
 
 # Run when a PR that makes an edit to test directory or the Makefile is merged with master
 on:
