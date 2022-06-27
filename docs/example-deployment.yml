@@ -18,7 +18,7 @@ spec:
       serviceAccountName: netbox-ip-controller
       containers:
         name: controller
-        image: docker.io/<username>/netbox-ip-controller:<tag>
+        image: digitalocean/netbox-ip-controller:<tag>
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 8001 # for metrics
