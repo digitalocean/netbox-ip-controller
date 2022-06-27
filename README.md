@@ -45,16 +45,20 @@ Integration tests can be run locally by using the `integration-test` make target
 This sets up, executes, and cleans up the integration test. Alternatively, you can use the `setup`, `execute`, and `cleanup`
 targets individually, which can be helpful for leaving the netbox environment up after executing tests for debugging.
 
-## Running in-cluster
+## Install
 
-After cloning the repo, build the docker image:
+A sample deployment for running in-cluster can be found at [docs/example-deployment.yml](docs/example-deployment.yml).
+If you have RBAC enabled in the cluster, you will also need [docs/rbac.yml](/docs/rbac.yml).
+
+Docker images are automatically built and distributed for each release and can be found at `digitalocean/netbox-ip-controller:<tag>`.
+Image tags will always correspond to a release's version number. 
+
+Alternatively, you can build and host the image yourself. After cloning the repo, build and push the docker image:
 ```
 docker build -t <username>/netbox-ip-controller:<tag> ./cmd/netbox-ip-controller/
 docker push <username>/netbox-ip-controller:<tag>
 ```
-
-A sample deployment can be found at [docs/example-deployment.yml](docs/example-deployment.yml).
-If you have RBAC enabled in the cluster, you will also need [docs/rbac.yml](/docs/rbac.yml).
+and use `<username>/netbox-ip-controller:<tag>` in your deployment manifest. 
 
 ## Uninstall
 
