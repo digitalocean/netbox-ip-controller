@@ -23,6 +23,7 @@ import (
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
+	"github.com/hashicorp/go-multierror"
 
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -119,7 +120,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	// Create/update non-nil NetBoxIPs
 	for _, ip := range []*v1beta1.NetBoxIP{ips.IPv4, ips.IPv6} {
-		if ip == nil {
+		if ip == nil || !podShouldHaveIP(&pod) {
 			continue
 		}
 
@@ -135,12 +136,18 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	// For both IPv4 and IPv6 addresses, delete the associated NetBoxIP object (if it exists) if the Pod
 	// no longer has an address of that scheme assigned, or if the pod has entered a succeeded or failed phase.
 	// This is because if the pod has entered a completed phase, its IP may be re-used by another pod.
+
+	var errs multierror.Error
 	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv4, pod, "ipv4"); err != nil {
-		return reconcile.Result{}, nil
+		multierror.Append(&errs, err)
 	}
 
 	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv6, pod, "ipv6"); err != nil {
-		return reconcile.Result{}, nil
+		multierror.Append(&errs, err)
+	}
+
+	if errs.ErrorOrNil() != nil {
+		return reconcile.Result{}, &errs
 	}
 
 	return reconcile.Result{}, nil
@@ -175,11 +182,15 @@ func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta
 	if client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("fetching NetBoxIP: %q", err)
 	} else if !kubeerrors.IsNotFound(err) {
-		if netboxip == nil || pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		if netboxip == nil || !podShouldHaveIP(&pod) {
 			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("deleting netboxip: %w", err)
 			}
 		}
 	}
 	return nil
+}
+
+func podShouldHaveIP(pod *corev1.Pod) bool {
+	return !(pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)
 }

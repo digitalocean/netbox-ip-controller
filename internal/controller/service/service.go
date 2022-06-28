@@ -23,6 +23,7 @@ import (
 	"github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	ctrl "github.com/digitalocean/netbox-ip-controller/internal/controller"
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
+	"github.com/hashicorp/go-multierror"
 
 	log "go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -117,7 +118,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	for _, ip := range []*v1beta1.NetBoxIP{ips.IPv4, ips.IPv6} {
-		if ip == nil {
+		if ip == nil || !serviceShouldHaveIP(&svc) {
 			continue
 		}
 
@@ -134,12 +135,17 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	// For both IPv4 and IPv6 addresses, delete the associated NetBoxIP object (if it exists)
 	// if the service no longer has an address of that scheme assigned.
+	var errs multierror.Error
 	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv4, svc, "ipv4"); err != nil {
-		return reconcile.Result{}, nil
+		multierror.Append(&errs, err)
 	}
 
 	if err = r.deleteNetBoxIPIfStale(ctx, ips.IPv6, svc, "ipv6"); err != nil {
-		return reconcile.Result{}, nil
+		multierror.Append(&errs, err)
+	}
+
+	if errs.ErrorOrNil() != nil {
+		return reconcile.Result{}, &errs
 	}
 
 	return reconcile.Result{}, nil
@@ -172,11 +178,15 @@ func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta
 	if client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("fetching NetBoxIP: %q", err)
 	} else if !kubeerrors.IsNotFound(err) {
-		if netboxip == nil || svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
+		if netboxip == nil || !serviceShouldHaveIP(&svc) {
 			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("deleting netboxip: %w", err)
 			}
 		}
 	}
 	return nil
+}
+
+func serviceShouldHaveIP(svc *corev1.Service) bool {
+	return !(svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None")
 }

@@ -351,7 +351,10 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 
 	controllers := make(map[string]ctrl.Controller)
 
-	netboxController, err := netboxipctrl.New(ctrl.WithNetBoxClient(netboxClient))
+	netboxController, err := netboxipctrl.New(
+		ctrl.WithLogger(logger),
+		ctrl.WithNetBoxClient(netboxClient),
+	)
 	if err != nil {
 		return fmt.Errorf("initializing netbox controller: %q", err)
 	}
