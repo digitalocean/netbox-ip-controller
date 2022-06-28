@@ -103,6 +103,7 @@ func CreateNetBoxIPs(ips []string, config NetBoxIPConfig) (*IPs, error) {
 				Labels: map[string]string{
 					netboxctrl.NameLabel: config.Object.GetName(),
 				},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address:     addr,
@@ -185,6 +186,7 @@ func UpsertNetBoxIP(ctx context.Context, kubeClient client.Client, ll *log.Logge
 
 		existingIP.Spec = ip.Spec
 		existingIP.OwnerReferences = ip.OwnerReferences
+		existingIP.Finalizers = ip.Finalizers
 		existingIP.Labels = ip.Labels
 		if err := kubeClient.Update(ctx, &existingIP); err != nil {
 			return fmt.Errorf("updating netboxip: %w", err)

@@ -103,6 +103,7 @@ func TestReconcile(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
@@ -252,6 +253,7 @@ func TestReconcile(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
@@ -303,6 +305,7 @@ func TestReconcile(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
@@ -422,6 +425,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
@@ -473,6 +477,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
@@ -522,6 +527,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom4([4]byte{192, 168, 0, 1}),
@@ -550,6 +556,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}),
@@ -867,6 +874,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom4([4]byte{192, 168, 0, 2}),
@@ -895,6 +903,7 @@ func TestReconcileDualStack(t *testing.T) {
 					Controller:         pointer.Bool(true),
 					BlockOwnerDeletion: pointer.Bool(true),
 				}},
+				Finalizers: []string{netboxctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
 				Address: netip.AddrFrom16([16]byte{0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4}),
