@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"sort"
 	"strings"
 
 	netboxctrl "github.com/digitalocean/netbox-ip-controller"
@@ -61,12 +62,14 @@ type NetBoxIPConfig struct {
 // given as input
 func CreateNetBoxIPs(ips []string, config NetBoxIPConfig) (*IPs, error) {
 
-	labels := []string{fmt.Sprintf("namespace: %s", config.Object.GetNamespace())}
+	labels := make([]string, 0)
 	for key, value := range config.Object.GetLabels() {
 		if config.ReconcilerLabels[key] {
 			labels = append(labels, fmt.Sprintf("%s: %s", key, value))
 		}
 	}
+	sort.Strings(labels)
+	labels = append([]string{fmt.Sprintf("namespace: %s", config.Object.GetNamespace())}, labels...)
 
 	var tags []v1beta1.Tag
 	for _, tag := range config.ReconcilerTags {
@@ -75,6 +78,7 @@ func CreateNetBoxIPs(ips []string, config NetBoxIPConfig) (*IPs, error) {
 			Slug: tag.Slug,
 		})
 	}
+	sort.Slice(tags, func(i, j int) bool { return tags[i].Name < tags[j].Name })
 
 	var outputIPs IPs
 
