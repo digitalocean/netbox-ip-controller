@@ -21,6 +21,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"go.uber.org/zap"
 )
 
 func TestParseAndValidateURL(t *testing.T) {
@@ -59,7 +61,8 @@ func TestParseAndValidateURL(t *testing.T) {
 }
 
 func TestRetryableHTTPClient(t *testing.T) {
-	client := retryableHTTPClient(1)
+	c := &client{logger: zap.L()}
+	c.setRetryableHTTPClient(1)
 
 	t.Run("idempotent requests retried", func(t *testing.T) {
 		var numCalls int
@@ -69,7 +72,7 @@ func TestRetryableHTTPClient(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		client.Get(ts.URL)
+		c.httpClient.Get(ts.URL)
 
 		numRetries := numCalls - 1
 		if numRetries != 1 {
@@ -85,7 +88,7 @@ func TestRetryableHTTPClient(t *testing.T) {
 		}))
 		defer ts.Close()
 
-		client.Post(ts.URL, "application/json", bytes.NewBufferString(`{}`))
+		c.httpClient.Post(ts.URL, "application/json", bytes.NewBufferString(`{}`))
 
 		numRetries := numCalls - 1
 		if numRetries != 0 {
