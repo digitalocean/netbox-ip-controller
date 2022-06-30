@@ -20,6 +20,7 @@ package netbox
 // and makes talking to netbox a bit nicer
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -81,9 +82,10 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 	}
 
 	c := &client{
-		baseURL: strings.TrimSuffix(u.String(), "/"),
-		token:   apiToken,
-		logger:  log.L(),
+		httpClient: retryablehttp.NewClient(),
+		baseURL:    strings.TrimSuffix(u.String(), "/"),
+		token:      apiToken,
+		logger:     log.L(),
 	}
 
 	for _, opt := range opts {
@@ -92,7 +94,8 @@ func NewClient(apiURL, apiToken string, opts ...ClientOption) (Client, error) {
 		}
 	}
 
-	c.setRetryableHTTPClient(5)
+	c.httpClient.RetryMax = 5
+	c.httpClient.Logger = newRetryableHTTPLogger(c.logger)
 
 	if c.rateLimiter == nil {
 		c.rateLimiter = rate.NewLimiter(rate.Inf, 1)
@@ -153,28 +156,6 @@ func parseAndValidateURL(apiURL string) (*url.URL, error) {
 		return nil, errors.New("NetBox URL must be in scheme://host:port format")
 	}
 	return u, nil
-}
-
-func (c *client) setRetryableHTTPClient(retryMax int) {
-	// add retries on 50X errors
-	retryClient := retryablehttp.NewClient()
-	retryClient.RetryMax = retryMax
-	if c.logger != nil {
-		retryClient.Logger = newRetryableHTTPLogger(c.logger)
-	}
-
-	retryClient.CheckRetry = func(ctx context.Context, res *http.Response, err error) (bool, error) {
-		if err == nil {
-			// do not retry non-idempotent requests
-			method := res.Request.Method
-			if method == http.MethodPost || method == http.MethodPatch {
-				return false, nil
-			}
-		}
-		return retryablehttp.DefaultRetryPolicy(ctx, res, err)
-	}
-
-	c.httpClient = retryClient
 }
 
 // NOTE: trailing "/" is required for endpoints that work with a single object ID
@@ -373,7 +354,7 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 		}
 	}
 
-	req, err := retryablehttp.NewRequest(method, url, b)
+	req, err := http.NewRequest(method, url, bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -391,9 +372,21 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 		return nil, err
 	}
 
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+	var res *http.Response
+	var responseErr error
+	if method == http.MethodPost || method == http.MethodPatch {
+		// non-idempotent method - we should not retry it
+		res, responseErr = c.httpClient.HTTPClient.Do(req)
+	} else {
+		retryableReq, err := retryablehttp.FromRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		res, responseErr = c.httpClient.Do(retryableReq)
+
+	}
+	if responseErr != nil {
+		return nil, responseErr
 	}
 	defer res.Body.Close()
 
