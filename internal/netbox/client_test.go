@@ -17,12 +17,7 @@ limitations under the License.
 package netbox
 
 import (
-	"bytes"
-	"net/http"
-	"net/http/httptest"
 	"testing"
-
-	"go.uber.org/zap"
 )
 
 func TestParseAndValidateURL(t *testing.T) {
@@ -58,41 +53,4 @@ func TestParseAndValidateURL(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestRetryableHTTPClient(t *testing.T) {
-	c := &client{logger: zap.L()}
-	c.setRetryableHTTPClient(1)
-
-	t.Run("idempotent requests retried", func(t *testing.T) {
-		var numCalls int
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			numCalls++
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer ts.Close()
-
-		c.httpClient.Get(ts.URL)
-
-		numRetries := numCalls - 1
-		if numRetries != 1 {
-			t.Errorf("want %d retries, got %d", 1, numRetries)
-		}
-	})
-
-	t.Run("non-idempotent requests not retried", func(t *testing.T) {
-		var numCalls int
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			numCalls++
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer ts.Close()
-
-		c.httpClient.Post(ts.URL, "application/json", bytes.NewBufferString(`{}`))
-
-		numRetries := numCalls - 1
-		if numRetries != 0 {
-			t.Errorf("want %d retries, got %d", 0, numRetries)
-		}
-	})
 }

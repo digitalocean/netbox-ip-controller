@@ -153,7 +153,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		})
 	}
 
-	_, err = r.netboxClient.UpsertIP(ctx, &netbox.IPAddress{
+	ipAddr, err := r.netboxClient.UpsertIP(ctx, &netbox.IPAddress{
 		UID:         netbox.UID(ip.UID),
 		DNSName:     ip.Spec.DNSName,
 		Address:     netbox.IP(ip.Spec.Address),
@@ -163,7 +163,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("upserting IP: %w", err)
 	}
-	ll.Info("upserted IP")
+	ll.Info("upserted IP", log.Int64("id", ipAddr.ID))
 
 	return reconcile.Result{}, nil
 }
