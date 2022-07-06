@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/cobra"
 	log "go.uber.org/zap"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -95,15 +96,34 @@ func clean(ctx context.Context, cfg *globalConfig) error {
 			func(err error) bool { return true },
 			func() error {
 				if err := netboxClient.DeleteIP(ctx, netbox.UID(ip.UID)); err != nil {
+					ll.Error("deleting IP from NetBox", log.Error(err))
 					return fmt.Errorf("deleting IP from NetBox: %w", err)
 				}
-				ll.Info("deleted from NetBox")
+
+				return nil
+			})
+		ll.Info("deleted from NetBox")
+
+		err = retry.OnError(
+			backoff1min,
+			func(err error) bool { return true },
+			func() error {
+				err = kubeClient.Get(ctx, client.ObjectKey{Namespace: ip.Namespace, Name: ip.Name}, &ip)
+				if kubeerrors.IsNotFound(err) {
+					// something must've deleted this object by now
+					return nil
+				} else if err != nil {
+					ll.Error("retrieving current version of netboxip", log.Error(err))
+					return fmt.Errorf("retrieving current version of netboxip: %w", err)
+				}
 
 				controllerutil.RemoveFinalizer(&ip, netboxctrl.IPFinalizer)
 				if err := kubeClient.Update(ctx, &ip); err != nil {
+					ll.Error("removing finalizer", log.Error(err))
 					return fmt.Errorf("removing finalizer: %w", err)
 				}
 				if err := kubeClient.Delete(ctx, &ip); err != nil {
+					ll.Error("deleting netboxip", log.Error(err))
 					return fmt.Errorf("deleting netboxip: %w", err)
 				}
 				ll.Info("netboxip deleted")
