@@ -1,3 +1,5 @@
+**This repo is no longer updated as the project was moved to the public Github 🎉 https://github.com/digitalocean/netbox-ip-controller**
+
 # NetBox IP Controller
 
 This controller watches Kubernetes pods and services and imports their IPs,
