@@ -31,6 +31,10 @@ spec:
             secretKeyRef:
               key: netbox-token
               name: netbox-ip-controller
+        - name: POD_PUBLISH_LABELS
+          value: app,k8s-app
+        - name: SERVICE_PUBLISH_LABELS
+          value: app,k8s-app
 ---
 apiVersion: v1
 kind: Secret
