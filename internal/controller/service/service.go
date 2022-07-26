@@ -118,7 +118,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	}
 
 	for _, ip := range []*v1beta1.NetBoxIP{ips.IPv4, ips.IPv6} {
-		if ip == nil || !serviceShouldHaveIP(&svc) {
+		if ip == nil || !r.serviceShouldHaveIP(&svc) {
 			continue
 		}
 
@@ -178,7 +178,7 @@ func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta
 	if client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("fetching NetBoxIP: %q", err)
 	} else if !kubeerrors.IsNotFound(err) {
-		if netboxip == nil || !serviceShouldHaveIP(&svc) {
+		if netboxip == nil || !r.serviceShouldHaveIP(&svc) {
 			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("deleting netboxip: %w", err)
 			}
@@ -187,6 +187,6 @@ func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta
 	return nil
 }
 
-func serviceShouldHaveIP(svc *corev1.Service) bool {
-	return !(svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None")
+func (r *reconciler) serviceShouldHaveIP(svc *corev1.Service) bool {
+	return ctrl.HasPublishLabels(r.labels, svc.Labels) && !(svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None")
 }

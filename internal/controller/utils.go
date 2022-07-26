@@ -200,3 +200,14 @@ func UpsertNetBoxIP(ctx context.Context, kubeClient client.Client, ll *log.Logge
 		return nil
 	})
 }
+
+// HasPublishLabels checks if the given object labels contain any of the publish labels
+// (i.e. labels that indicate its IP should be exported).
+func HasPublishLabels(publishLabels map[string]bool, objLabels map[string]string) bool {
+	for label := range publishLabels {
+		if _, ok := objLabels[label]; ok {
+			return true
+		}
+	}
+	return false
+}

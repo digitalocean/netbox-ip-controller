@@ -173,6 +173,25 @@ func TestReconcile(t *testing.T) {
 		},
 		expectedNetBoxIP: nil,
 	}, {
+		name: "without publish labels",
+		existingPod: &corev1.Pod{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Pod",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(podUID),
+				Labels:    map[string]string{"wrong_label": "foo"},
+			},
+			Status: corev1.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		},
+		existingNetBoxIP: nil,
+		expectedNetBoxIP: nil,
+	}, {
 		name: "fix NetBoxIP that got out of sync",
 		existingPod: &corev1.Pod{
 			TypeMeta: metav1.TypeMeta{

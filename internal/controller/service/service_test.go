@@ -205,6 +205,27 @@ func TestReconcile(t *testing.T) {
 		},
 		expectedNetBoxIP: nil,
 	}, {
+		name: "without publish labels",
+		existingService: &corev1.Service{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Service",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				UID:       types.UID(serviceUID),
+				Labels:    map[string]string{"wrong_label": "foo"},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports:     []corev1.ServicePort{{Port: 8080}},
+				Type:      corev1.ServiceTypeClusterIP,
+				ClusterIP: "192.168.0.1",
+			},
+		},
+		existingNetBoxIP: nil,
+		expectedNetBoxIP: nil,
+	}, {
 		name: "fix NetBoxIP that got out of sync",
 		existingService: &corev1.Service{
 			TypeMeta: metav1.TypeMeta{

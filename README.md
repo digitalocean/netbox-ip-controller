@@ -23,8 +23,8 @@ with dashes (`-`) replaced with underscores (`_`).
 `cluster-domain` | `cluster.local` | Domain name of the cluster. Optional.
 `pod-ip-tags` | `kubernetes,k8s-pod` | Comma-separated list of tags to add to pod IPs in NetBox. Any tags that don't yet exist will be created. Optional.
 `service-ip-tags` | `kubernetes,k8s-service` | Comma-separated list of tags to add to service IPs in NetBox. Any tags that don't yet exist will be created. Optional.
-`pod-publish-labels` | `app` | Comma-separated list of kubernetes pod labels to be added to the IP description in NetBox in `label: label_value` format. Optional. 
-`service-publish-labels` | `app` | Comma-separated list of kubernetes service labels to be added to the IP description in NetBox in `label: label_value` format. Optional. 
+`pod-publish-labels` | `app` | Comma-separated list of kubernetes pod labels to be added to the IP description in NetBox in `label: label_value` format. Only the IPs of the pods that have one of these labels set will be exported. Optional. 
+`service-publish-labels` | `app` | Comma-separated list of kubernetes service labels to be added to the IP description in NetBox in `label: label_value` format. Only the IPs of the services that have one of these labels set will be exported. Optional. 
 `dual-stack-ip` | `false` | Enables registering both IPv4 and IPv6 addresses of pods and services where applicable in dual stack clusters. Optional.
 `ready-check-addr` | `:5001` | Sets the address that the controller manager will bind to for serving the ready check endpoint. Can be a full TCP address or only a port (e.g. `:5001`). Optional. 
 `debug` | `false` | Turns on debug logging. Optional.
