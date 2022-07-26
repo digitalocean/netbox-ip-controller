@@ -191,6 +191,8 @@ func (ip *IPAddress) changed(ip2 *IPAddress) bool {
 	sortTags := func(t1, t2 Tag) bool { return t1.Name < t2.Name }
 
 	return !cmp.Equal(ip, ip2,
+		cmpopts.IgnoreFields(IPAddress{}, "ID"),
+		cmpopts.IgnoreFields(Tag{}, "ID"),
 		cmpopts.SortSlices(sortTags),
 		cmpopts.EquateEmpty(),
 		cmpopts.IgnoreUnexported(IP{}),

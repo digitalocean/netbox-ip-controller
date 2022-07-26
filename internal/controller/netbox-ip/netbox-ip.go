@@ -163,7 +163,9 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("upserting IP: %w", err)
 	}
-	ll.Info("upserted IP", log.Int64("id", ipAddr.ID))
+	if ipAddr != nil {
+		ll.Info("upserted IP", log.Int64("id", ipAddr.ID))
+	}
 
 	return reconcile.Result{}, nil
 }
