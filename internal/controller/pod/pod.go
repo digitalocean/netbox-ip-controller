@@ -120,7 +120,7 @@ func (r *reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	// Create/update non-nil NetBoxIPs
 	for _, ip := range []*v1beta1.NetBoxIP{ips.IPv4, ips.IPv6} {
-		if ip == nil || !podShouldHaveIP(&pod) {
+		if ip == nil || !r.podShouldHaveIP(&pod) {
 			continue
 		}
 
@@ -182,7 +182,7 @@ func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta
 	if client.IgnoreNotFound(err) != nil {
 		return fmt.Errorf("fetching NetBoxIP: %q", err)
 	} else if !kubeerrors.IsNotFound(err) {
-		if netboxip == nil || !podShouldHaveIP(&pod) {
+		if netboxip == nil || !r.podShouldHaveIP(&pod) {
 			if err := r.kubeClient.Delete(ctx, &ip); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("deleting netboxip: %w", err)
 			}
@@ -191,6 +191,7 @@ func (r *reconciler) deleteNetBoxIPIfStale(ctx context.Context, netboxip *v1beta
 	return nil
 }
 
-func podShouldHaveIP(pod *corev1.Pod) bool {
-	return !(pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)
+func (r *reconciler) podShouldHaveIP(pod *corev1.Pod) bool {
+	return ctrl.HasPublishLabels(r.labels, pod.Labels) &&
+		!(pod.Status.PodIP == "" || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)
 }
