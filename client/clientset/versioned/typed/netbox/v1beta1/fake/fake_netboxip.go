@@ -105,7 +105,7 @@ func (c *FakeNetBoxIPs) Update(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, 
 // Delete takes name of the netBoxIP and deletes it. Returns an error if one occurs.
 func (c *FakeNetBoxIPs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(netboxipsResource, c.ns, name), &v1beta1.NetBoxIP{})
+		Invokes(testing.NewDeleteActionWithOptions(netboxipsResource, c.ns, name, opts), &v1beta1.NetBoxIP{})
 
 	return err
 }

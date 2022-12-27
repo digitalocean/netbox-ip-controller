@@ -64,7 +64,7 @@ func clean(ctx context.Context, cfg *globalConfig) error {
 	}
 
 	netboxClientOpts := []netbox.ClientOption{
-		netbox.WithRateLimiter(globalCfg.netboxQPS, cfg.netboxBurst),
+		netbox.WithRateLimiter(cfg.netboxQPS, cfg.netboxBurst),
 		netbox.WithLogger(cfg.logger),
 	}
 	if cfg.netboxCACertPath != "" {
