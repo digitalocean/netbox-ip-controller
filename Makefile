@@ -23,7 +23,7 @@ ENVTEST_DIGEST := sha256:5e89ba1def5fb4802bc9e83e81d1b2f5f484eb09189d2487eb2e500
 
 K8S_VERSION := 1.25.5
 ETCD_VERSION := 3.5.0
-GO_VERSION := 1.18
+GO_VERSION := 1.19
 
 ifeq ($(strip $(shell git status --porcelain 2>/dev/null)),)
 	GIT_TREE_STATE=clean
