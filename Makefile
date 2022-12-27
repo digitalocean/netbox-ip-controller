@@ -19,7 +19,7 @@ IMAGE ?= "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
 # Digest of the currently used envtest image
-ENVTEST_DIGEST := sha256:5e89ba1def5fb4802bc9e83e81d1b2f5f484eb09189d2487eb2e500e92f21dff
+ENVTEST_DIGEST := sha256:f2d8c1e431bf079f48854e2910da8e66cb5b829380a8052f5d7ecaf49a341896
 
 K8S_VERSION := 1.25.5
 ETCD_VERSION := 3.5.0
