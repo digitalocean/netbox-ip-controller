@@ -28,9 +28,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/digitalocean/netbox-ip-controller/internal/metrics"
@@ -125,7 +125,7 @@ func WithRateLimiter(refillRate rate.Limit, bucketSize int) ClientOption {
 // found at the given path to the TLSClientConfig of the client's underlying HTTPClient.
 func WithCARootCert(path string) ClientOption {
 	return func(c *client) error {
-		cert, err := ioutil.ReadFile(path)
+		cert, err := os.ReadFile(path)
 		if err != nil {
 			if c.logger != nil {
 				c.logger.Error(err.Error())
@@ -396,7 +396,7 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 		return nil, err
 	}
 
-	data, err := ioutil.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
+	data, err := io.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
 	if err != nil {
 		return nil, errors.New("reading response data")
 	}
@@ -408,7 +408,7 @@ func httpErrorFrom(res *http.Response) error {
 		return nil
 	}
 
-	data, err := ioutil.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
+	data, err := io.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
 	if err != nil {
 		return fmt.Errorf("read error response data: %w", err)
 	}
