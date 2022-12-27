@@ -21,7 +21,7 @@ ENVTEST := digitalocean/k8s-env-test
 # Digest of the currently used envtest image
 ENVTEST_DIGEST := sha256:5e89ba1def5fb4802bc9e83e81d1b2f5f484eb09189d2487eb2e500e92f21dff
 
-K8S_VERSION := 1.23.6
+K8S_VERSION := 1.25.5
 ETCD_VERSION := 3.5.0
 GO_VERSION := 1.18
 
@@ -60,13 +60,15 @@ crd:
 		--volume $(shell pwd):/go/src/github.com/digitalocean/netbox-ip-controller \
 		--volume $(shell go env GOCACHE):/.cache/go-build \
 		golang:${GO_VERSION} bash -c "\
-			git clone --depth 1 --branch kubernetes-${K8S_VERSION} https://github.com/kubernetes/apimachinery /go/src/k8s.io/apimachinery && \
-			git clone --depth 1 --branch kubernetes-${K8S_VERSION} https://github.com/kubernetes/code-generator /go/src/k8s.io/code-generator && \
-			cd /go/src/k8s.io/code-generator && \
+			cd /go/src/github.com/digitalocean/netbox-ip-controller && \
+			git clone --depth 1 --branch kubernetes-${K8S_VERSION} https://github.com/kubernetes/code-generator vendor/k8s.io/code-generator && \
+			pushd vendor/k8s.io/code-generator && \
 			go mod download && \
 			go mod vendor && \
-			cd /go/src/github.com/digitalocean/netbox-ip-controller && \
-			/go/src/k8s.io/code-generator/generate-groups.sh all github.com/digitalocean/netbox-ip-controller/client github.com/digitalocean/netbox-ip-controller/api 'netbox:v1beta1'"
+			popd && \
+			vendor/k8s.io/code-generator/generate-groups.sh all github.com/digitalocean/netbox-ip-controller/client github.com/digitalocean/netbox-ip-controller/api 'netbox:v1beta1'" && \
+			go mod tidy && \
+			go mod vendor
 
 .PHONY: envtest-image
 envtest-image:
