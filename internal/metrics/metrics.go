@@ -26,6 +26,7 @@ import (
 // exposed by the kubernetes controller manager
 func init() {
 	kubemetrics.Registry.MustRegister(netboxTotalRequests)
+	kubemetrics.Registry.MustRegister(netboxFailedRequests)
 }
 
 var (
@@ -33,9 +34,18 @@ var (
 		Name: "netbox_requests_total",
 		Help: "Total number of requests sent to the NetBox API server",
 	})
+	netboxFailedRequests = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "netbox_failed_requests_total",
+		Help: "Total number of failed requests to NetBox Server",
+	})
 )
 
 // IncrementNetboxRequestsTotal increments the netbox_total_requests metric
 func IncrementNetboxRequestsTotal() {
 	netboxTotalRequests.Inc()
+}
+
+// IncrementFailedNetboxRequestsTotal increments the netbox_update_record_error_count metric
+func IncrementFailedNetboxRequestsTotal() {
+	netboxFailedRequests.Inc()
 }

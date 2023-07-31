@@ -386,6 +386,7 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 
 	}
 	if responseErr != nil {
+		metrics.IncrementFailedNetboxRequestsTotal()
 		return nil, responseErr
 	}
 	defer res.Body.Close()
@@ -393,6 +394,7 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 	metrics.IncrementNetboxRequestsTotal()
 
 	if err := httpErrorFrom(res); err != nil {
+		metrics.IncrementFailedNetboxRequestsTotal()
 		return nil, err
 	}
 
