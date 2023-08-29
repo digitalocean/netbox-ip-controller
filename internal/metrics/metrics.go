@@ -37,8 +37,8 @@ var (
 	)
 )
 
-// IncrementNetboxRequestsTotal increments the netbox_total_requests metric
-func IncrementNetboxRequestsTotal(isSuccess bool) {
+// IncrementNetboxRequests increments the netbox_total_requests metric with success/failure labels
+func IncrementNetboxRequests(isSuccess bool) {
 	if isSuccess {
 		netboxTotalRequests.WithLabelValues("success").Inc()
 	} else {
