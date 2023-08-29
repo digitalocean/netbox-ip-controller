@@ -386,17 +386,17 @@ func (c *client) executeRequest(ctx context.Context, url string, method string, 
 
 	}
 	if responseErr != nil {
-		metrics.IncrementFailedNetboxRequestsTotal()
+		metrics.IncrementNetboxRequestsTotal(false)
 		return nil, responseErr
 	}
 	defer res.Body.Close()
 
-	metrics.IncrementNetboxRequestsTotal()
-
 	if err := httpErrorFrom(res); err != nil {
-		metrics.IncrementFailedNetboxRequestsTotal()
+		metrics.IncrementNetboxRequestsTotal(false)
 		return nil, err
 	}
+
+	metrics.IncrementNetboxRequestsTotal(true)
 
 	data, err := io.ReadAll(io.LimitReader(res.Body, responseBodySizeLimit))
 	if err != nil {
