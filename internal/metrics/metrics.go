@@ -29,13 +29,19 @@ func init() {
 }
 
 var (
-	netboxTotalRequests = prometheus.NewCounter(prometheus.CounterOpts{
+	netboxTotalRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "netbox_requests_total",
 		Help: "Total number of requests sent to the NetBox API server",
-	})
+	},
+		[]string{"status"},
+	)
 )
 
-// IncrementNetboxRequestsTotal increments the netbox_total_requests metric
-func IncrementNetboxRequestsTotal() {
-	netboxTotalRequests.Inc()
+// IncrementNetboxRequests increments the netbox_total_requests metric with success/failure labels
+func IncrementNetboxRequests(isSuccess bool) {
+	if isSuccess {
+		netboxTotalRequests.WithLabelValues("success").Inc()
+	} else {
+		netboxTotalRequests.WithLabelValues("failure").Inc()
+	}
 }
