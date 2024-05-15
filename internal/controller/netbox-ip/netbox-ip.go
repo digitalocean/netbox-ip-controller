@@ -48,6 +48,9 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 		}
 	}
 
+	if s.KubeClient == nil {
+		return nil, errors.New("kubernetes client is required for netboxip controller")
+	}
 	if s.NetBoxClient == nil {
 		return nil, errors.New("netbox client is required for netboxip controller")
 	}
@@ -62,6 +65,7 @@ func New(opts ...ctrl.Option) (ctrl.Controller, error) {
 
 	return &controller{
 		reconciler: &reconciler{
+			kubeClient:   s.KubeClient,
 			netboxClient: s.NetBoxClient,
 			log:          logger.With(log.String("reconciler", "netboxip")),
 		},
@@ -85,14 +89,6 @@ type reconciler struct {
 	netboxClient netbox.Client
 	kubeClient   client.Client
 	log          *log.Logger
-}
-
-// InjectClient injects the client and implements inject.Client.
-// A client will be automatically injected.
-func (r *reconciler) InjectClient(c client.Client) error {
-	r.log.Debug("setting client")
-	r.kubeClient = c
-	return nil
 }
 
 // Reconcile is called on every event that the given reconciler is watching,

@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 const (
@@ -331,11 +332,14 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 
 	mgr, err := manager.New(globalCfg.kubeConfig, manager.Options{
-		Scheme:                 scheme,
-		Logger:                 zapr.NewLogger(logger.Named("netbox-ip-controller")),
-		MetricsBindAddress:     cfg.metricsAddr,
+		Scheme: scheme,
+		Logger: zapr.NewLogger(logger.Named("netbox-ip-controller")),
+		Metrics: metricsserver.Options{
+			BindAddress: cfg.metricsAddr,
+		},
 		HealthProbeBindAddress: cfg.readyCheckAddr,
 	})
+	client := mgr.GetClient()
 
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
@@ -352,6 +356,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	controllers := make(map[string]ctrl.Controller)
 
 	netboxController, err := netboxipctrl.New(
+		ctrl.WithKubernetesClient(client),
 		ctrl.WithLogger(logger),
 		ctrl.WithNetBoxClient(netboxClient),
 	)
@@ -361,6 +366,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	controllers["netboxip"] = netboxController
 
 	podCtrOpts := []ctrl.Option{
+		ctrl.WithKubernetesClient(client),
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.podTags, netboxClient),
 		ctrl.WithLabels(cfg.podLabels),
@@ -374,6 +380,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 	controllers["pod"] = podController
 	svcCtrOpts := []ctrl.Option{
+		ctrl.WithKubernetesClient(client),
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.serviceTags, netboxClient),
 		ctrl.WithLabels(cfg.serviceLabels),
