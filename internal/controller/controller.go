@@ -24,6 +24,7 @@ import (
 	"github.com/digitalocean/netbox-ip-controller/internal/netbox"
 
 	log "go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -37,6 +38,7 @@ type Controller interface {
 // Settings specify configuration of a controller.
 type Settings struct {
 	NetBoxClient  netbox.Client
+	KubeClient    client.Client
 	Tags          []netbox.Tag
 	Labels        map[string]bool
 	ClusterDomain string
@@ -107,6 +109,13 @@ func WithLabels(labels map[string]bool) Option {
 func WithNetBoxClient(client netbox.Client) Option {
 	return func(s *Settings) error {
 		s.NetBoxClient = client
+		return nil
+	}
+}
+
+func WithKubernetesClient(client client.Client) Option {
+	return func(s *Settings) error {
+		s.KubeClient = client
 		return nil
 	}
 }

@@ -336,6 +336,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 		MetricsBindAddress:     cfg.metricsAddr,
 		HealthProbeBindAddress: cfg.readyCheckAddr,
 	})
+	client := mgr.GetClient()
 
 	if err != nil {
 		return fmt.Errorf("unable to set up manager: %s", err)
@@ -352,6 +353,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	controllers := make(map[string]ctrl.Controller)
 
 	netboxController, err := netboxipctrl.New(
+		ctrl.WithKubernetesClient(client),
 		ctrl.WithLogger(logger),
 		ctrl.WithNetBoxClient(netboxClient),
 	)
@@ -361,6 +363,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	controllers["netboxip"] = netboxController
 
 	podCtrOpts := []ctrl.Option{
+		ctrl.WithKubernetesClient(client),
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.podTags, netboxClient),
 		ctrl.WithLabels(cfg.podLabels),
@@ -374,6 +377,7 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 	controllers["pod"] = podController
 	svcCtrOpts := []ctrl.Option{
+		ctrl.WithKubernetesClient(client),
 		ctrl.WithLogger(logger),
 		ctrl.WithTags(cfg.serviceTags, netboxClient),
 		ctrl.WithLabels(cfg.serviceLabels),
