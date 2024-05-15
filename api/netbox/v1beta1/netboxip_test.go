@@ -32,7 +32,7 @@ func TestValidationSchema(t *testing.T) {
 	if err := apiextensionsv1.Convert_v1_CustomResourceValidation_To_apiextensions_CustomResourceValidation(NetBoxIPValidationSchema, &schema, nil); err != nil {
 		t.Errorf("converting CRD validation: %q\n", err)
 	}
-	validator, _, err := apiservervalidation.NewSchemaValidator(&schema)
+	validator, _, err := apiservervalidation.NewSchemaValidator(schema.OpenAPIV3Schema)
 	if err != nil {
 		t.Errorf("creating validator: %q\n", err)
 	}
