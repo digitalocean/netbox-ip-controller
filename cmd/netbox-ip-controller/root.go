@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 const (
@@ -331,9 +332,11 @@ func run(ctx context.Context, globalCfg *globalConfig, cfg *rootConfig) error {
 	}
 
 	mgr, err := manager.New(globalCfg.kubeConfig, manager.Options{
-		Scheme:                 scheme,
-		Logger:                 zapr.NewLogger(logger.Named("netbox-ip-controller")),
-		MetricsBindAddress:     cfg.metricsAddr,
+		Scheme: scheme,
+		Logger: zapr.NewLogger(logger.Named("netbox-ip-controller")),
+		Metrics: metricsserver.Options{
+			BindAddress: cfg.metricsAddr,
+		},
 		HealthProbeBindAddress: cfg.readyCheckAddr,
 	})
 	client := mgr.GetClient()
