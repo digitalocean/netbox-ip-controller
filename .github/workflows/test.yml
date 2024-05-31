@@ -36,6 +36,7 @@ jobs:
       uses: actions/setup-go@v5.0.1
       with:
         go-version: ${{ matrix.go-version }}
+        cache: false
 
     - name: Checkout current branch
       uses: actions/checkout@v4.1.6

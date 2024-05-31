@@ -43,6 +43,7 @@ jobs:
         uses: actions/setup-go@v5.0.1
         with:
           go-version: ${{ matrix.go-version }}
+          cache: false
 
       - name: Build image
         run : IMAGE=${{ env.IMAGE_NAME }} make build-image
