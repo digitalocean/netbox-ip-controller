@@ -53,7 +53,6 @@ test:
 .PHONY: crd
 crd:
 	docker run \
-		--user=$(shell id -u) \
 		--interactive \
 		--tty \
 		--env "GOPRIVATE=*.internal.digitalocean.com,github.com/digitalocean" \
@@ -66,7 +65,7 @@ crd:
 			go mod download && \
 			go mod vendor && \
 			popd && \
-			vendor/k8s.io/code-generator/generate-groups.sh all github.com/digitalocean/netbox-ip-controller/client github.com/digitalocean/netbox-ip-controller/api 'netbox:v1beta1'" && \
+			vendor/k8s.io/code-generator/kube_codegen.sh applyconfiguration,client,deepcopy,informer,lister github.com/digitalocean/netbox-ip-controller/client github.com/digitalocean/netbox-ip-controller/api 'netbox:v1beta1'" && \
 			go mod tidy && \
 			go mod vendor
 
