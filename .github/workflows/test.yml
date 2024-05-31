@@ -38,7 +38,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
 
     - name: Checkout current branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.6
 
     - name: gofmt
       run : ./scripts/gofmt.sh
