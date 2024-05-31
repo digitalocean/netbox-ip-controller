@@ -33,8 +33,11 @@ jobs:
         export TEST_IMAGE="$(make get-envtest-image-tag -s)"
         echo "TEST_IMAGE=${TEST_IMAGE}" >> ${GITHUB_ENV}
         
-    - name: Log into container registry
-      run :  docker login --username ${{ secrets.DOCKER_HUB_USER }} --password-stdin <<< ${{ secrets.DOCKER_HUB_TOKEN }}
+    - name: Log in to the Docker Hub
+      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      with:
+        username: ${{ secrets.DOCKER_HUB_USER }} 
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
     # Build a new testenv image to use if and only if the Dockerfile or Makefile is changed in this PR
     - name: Build image
