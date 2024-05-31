@@ -48,7 +48,7 @@ jobs:
         run : IMAGE=${{ env.IMAGE_NAME }} make build-image
 
       - name: Log in to the GitHub registry
-        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        uses: docker/login-action@v3.2.0
         with:
           registry: ${{ env.GITHUB_REGISTRY }}
           username: ${{ github.actor }}
@@ -61,7 +61,7 @@ jobs:
               docker push $GITHUB_TAG
 
       - name: Log in to the Docker Hub
-        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        uses: docker/login-action@v3.2.0
         with:
           username: ${{ secrets.DOCKER_HUB_USER }} 
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
