@@ -113,6 +113,7 @@ func WithNetBoxClient(client netbox.Client) Option {
 	}
 }
 
+// WithKubernetesClient sets the Kubernetes client to be used by the controller
 func WithKubernetesClient(client client.Client) Option {
 	return func(s *Settings) error {
 		s.KubeClient = client

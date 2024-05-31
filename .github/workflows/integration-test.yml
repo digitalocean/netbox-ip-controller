@@ -19,12 +19,13 @@ jobs:
     steps:
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5.0.1
       with:
         go-version: ${{ matrix.go-version }}
+        cache: false
 
     - name: Checkout current branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.6
       with:
         fetch-depth: '0'
 
@@ -34,7 +35,7 @@ jobs:
         echo "TEST_IMAGE=${TEST_IMAGE}" >> ${GITHUB_ENV}
         
     - name: Log in to the Docker Hub
-      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      uses: docker/login-action@v3.2.0
       with:
         username: ${{ secrets.DOCKER_HUB_USER }} 
         password: ${{ secrets.DOCKER_HUB_TOKEN }}

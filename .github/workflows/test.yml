@@ -33,12 +33,13 @@ jobs:
     steps:
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5.0.1
       with:
         go-version: ${{ matrix.go-version }}
+        cache: false
 
     - name: Checkout current branch
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.6
 
     - name: gofmt
       run : ./scripts/gofmt.sh
@@ -50,7 +51,7 @@ jobs:
       run : revive -exclude vendor/... ./...
 
     - name: Install 
-      run : go install honnef.co/go/tools/cmd/staticcheck@v0.3.0
+      run : go install honnef.co/go/tools/cmd/staticcheck@v0.4.7
 
     - name: Static check
       run : ./scripts/static-check.sh
