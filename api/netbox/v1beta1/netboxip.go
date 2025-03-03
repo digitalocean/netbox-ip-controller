@@ -24,7 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 // +genclient
@@ -110,13 +110,13 @@ var tagSchema = &apiextensionsv1.JSONSchemaProps{
 	Properties: map[string]apiextensionsv1.JSONSchemaProps{
 		"name": apiextensionsv1.JSONSchemaProps{
 			Type:      "string",
-			MinLength: pointer.Int64(1),
-			MaxLength: pointer.Int64(100),
+			MinLength: ptr.To[int64](1),
+			MaxLength: ptr.To[int64](100),
 		},
 		"slug": apiextensionsv1.JSONSchemaProps{
 			Type:      "string",
-			MinLength: pointer.Int64(1),
-			MaxLength: pointer.Int64(100),
+			MinLength: ptr.To[int64](1),
+			MaxLength: ptr.To[int64](100),
 			Pattern:   tagSlugRegexp,
 		},
 	},
@@ -130,15 +130,15 @@ var NetBoxIPValidationSchema = &apiextensionsv1.CustomResourceValidation{
 				Properties: map[string]apiextensionsv1.JSONSchemaProps{
 					"address": apiextensionsv1.JSONSchemaProps{
 						Type:      "string",
-						MinLength: pointer.Int64(1),
+						MinLength: ptr.To[int64](1),
 						// actual validation happens when unmarshaling, here we only
 						// make sure the addess is not empty (empty addresses will not
 						// produce an error when unmarshaled)
 					},
 					"dnsName": apiextensionsv1.JSONSchemaProps{
 						Type:      "string",
-						MinLength: pointer.Int64(1),
-						MaxLength: pointer.Int64(253),
+						MinLength: ptr.To[int64](1),
+						MaxLength: ptr.To[int64](253),
 						Pattern:   dnsNameRegexp,
 					},
 					"tags": apiextensionsv1.JSONSchemaProps{
@@ -150,7 +150,7 @@ var NetBoxIPValidationSchema = &apiextensionsv1.CustomResourceValidation{
 					"description": apiextensionsv1.JSONSchemaProps{
 						Type: "string",
 						// limit set by NetBox
-						MaxLength: pointer.Int64(200),
+						MaxLength: ptr.To[int64](200),
 					},
 				},
 			},
