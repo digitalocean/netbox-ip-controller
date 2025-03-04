@@ -42,7 +42,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -371,7 +370,7 @@ func TestClean(t *testing.T) {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       name,
-				Namespace:  v1.NamespaceDefault,
+				Namespace:  corev1.NamespaceDefault,
 				Finalizers: []string{netboxipctrl.IPFinalizer},
 			},
 			Spec: v1beta1.NetBoxIPSpec{
@@ -381,7 +380,7 @@ func TestClean(t *testing.T) {
 		}
 
 		var err error
-		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(v1.NamespaceDefault).Create(context.Background(), ip, metav1.CreateOptions{})
+		ip, err = env.KubeCRDClient.NetboxV1beta1().NetBoxIPs(corev1.NamespaceDefault).Create(context.Background(), ip, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatalf("creating netboxip: %q\n", err)
 		}
