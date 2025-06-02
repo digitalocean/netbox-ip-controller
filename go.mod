@@ -1,6 +1,8 @@
 module github.com/digitalocean/netbox-ip-controller
 
-go 1.23
+go 1.22.0
+
+toolchain go1.24.1
 
 require (
 	github.com/go-logr/zapr v1.2.4
