@@ -33,8 +33,7 @@ type Interface interface {
 	NetboxV1beta1() netboxv1beta1.NetboxV1beta1Interface
 }
 
-// Clientset contains the clients for groups. Each group has exactly one
-// version included in a Clientset.
+// Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
 	netboxV1beta1 *netboxv1beta1.NetboxV1beta1Client
