@@ -24,7 +24,6 @@ import (
 	v1beta1 "github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeNetBoxIPs struct {
 	ns   string
 }
 
-var netboxipsResource = schema.GroupVersionResource{Group: "netbox", Version: "v1beta1", Resource: "netboxips"}
+var netboxipsResource = v1beta1.SchemeGroupVersion.WithResource("netboxips")
 
-var netboxipsKind = schema.GroupVersionKind{Group: "netbox", Version: "v1beta1", Kind: "NetBoxIP"}
+var netboxipsKind = v1beta1.SchemeGroupVersion.WithKind("NetBoxIP")
 
 // Get takes name of the netBoxIP, and returns the corresponding netBoxIP object, and an error if there is any.
 func (c *FakeNetBoxIPs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.NetBoxIP, err error) {

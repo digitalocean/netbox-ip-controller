@@ -23,7 +23,7 @@ import (
 
 var (
 	// SchemeGroupVersion is the group version used to register netbox objects.
-	SchemeGroupVersion = schema.GroupVersion{Group: "netbox.digitalocean.com", Version: "v1beta1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "", Version: "v1beta1"}
 
 	schemeBuilder = (&scheme.Builder{GroupVersion: SchemeGroupVersion}).Register(&NetBoxIP{}, &NetBoxIPList{})
 
