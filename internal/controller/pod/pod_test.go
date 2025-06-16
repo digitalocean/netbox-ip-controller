@@ -391,7 +391,7 @@ func TestReconcile(t *testing.T) {
 			} else if test.expectedNetBoxIP == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want NetBoxIP not to exist, got %v\n", actualNetBoxIP)
 			} else if test.expectedNetBoxIP != nil {
-				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
+				if diff := cmp.Diff(test.expectedNetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion"), cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
 					t.Errorf("NetBoxIP object (-want, +got)\n%s", diff)
 				}
 			}
@@ -985,7 +985,7 @@ func TestReconcileDualStack(t *testing.T) {
 			} else if test.expectedIPv4NetBoxIP == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want IPv4 NetBoxIP not to exist, got %v\n", actualNetBoxIP)
 			} else if test.expectedIPv4NetBoxIP != nil {
-				if diff := cmp.Diff(test.expectedIPv4NetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
+				if diff := cmp.Diff(test.expectedIPv4NetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion"), cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
 					t.Errorf("NetBoxIP object (-want, +got)\n%s", diff)
 				}
 			}
@@ -1001,7 +1001,7 @@ func TestReconcileDualStack(t *testing.T) {
 			} else if test.expectedIPv6NetBoxIP == nil && !kubeerrors.IsNotFound(err) {
 				t.Errorf("want IPv6 NetBoxIP not to exist, got %v\n", actualNetBoxIP)
 			} else if test.expectedIPv6NetBoxIP != nil {
-				if diff := cmp.Diff(test.expectedIPv6NetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
+				if diff := cmp.Diff(test.expectedIPv6NetBoxIP, &actualNetBoxIP, cmpopts.IgnoreFields(metav1.TypeMeta{}, "APIVersion"), cmpopts.IgnoreFields(metav1.ObjectMeta{}, "ResourceVersion"), cmp.Comparer(addrComparer)); diff != "" {
 					t.Errorf("NetBoxIP object (-want, +got)\n%s", diff)
 				}
 			}
