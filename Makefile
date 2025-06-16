@@ -77,11 +77,15 @@ envtest-image:
 
 .PHONY: get-envtest-image-tag
 get-envtest-image-tag:
-	echo ${ENVTEST}@${ENVTEST_DIGEST}
+	echo $(ENVTEST):$(GITCOMMIT)
+
+.PHONY:
+envtest-image-push:
+	docker push digitalocean/k8s-env-test:$(GITCOMMIT)
 	
 .PHONY:
 integration-test:
-	TEST_IMAGE=${ENVTEST}@${ENVTEST_DIGEST} ./local/local-integration-test.sh all 
+	TEST_IMAGE=$(ENVTEST):$(GITCOMMIT) ./local/local-integration-test.sh all
 
 .PHONY:
 setup: 
@@ -89,7 +93,7 @@ setup:
 
 .PHONY:
 execute:
-	TEST_IMAGE=${ENVTEST}@${ENVTEST_DIGEST} ./local/local-integration-test.sh execute
+	TEST_IMAGE=$(ENVTEST):$(GITCOMMIT) ./local/local-integration-test.sh execute
 
 .PHONY:
 cleanup:
