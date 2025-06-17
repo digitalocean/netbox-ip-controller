@@ -18,12 +18,10 @@ NAME := netbox-ip-controller
 IMAGE ?= "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
-# Digest of the currently used envtest image
-ENVTEST_DIGEST := sha256:f2d8c1e431bf079f48854e2910da8e66cb5b829380a8052f5d7ecaf49a341896
 
-K8S_VERSION := 1.29.11
+K8S_VERSION := 1.30.11
 ETCD_VERSION := 3.5.0
-GO_VERSION := 1.21
+GO_VERSION := 1.22.0
 
 ifeq ($(strip $(shell git status --porcelain 2>/dev/null)),)
 	GIT_TREE_STATE=clean
@@ -66,7 +64,8 @@ crd:
 			go mod download && \
 			go mod vendor && \
 			popd && \
-			vendor/k8s.io/code-generator/generate-groups.sh all github.com/digitalocean/netbox-ip-controller/client github.com/digitalocean/netbox-ip-controller/api 'netbox:v1beta1'" && \
+			source vendor/k8s.io/code-generator/kube_codegen.sh && \
+			kube::codegen::gen_client --output-dir client --output-pkg github.com/digitalocean/netbox-ip-controller/client --boilerplate vendor/k8s.io/code-generator/examples/hack/boilerplate.go.txt api" && \
 			go mod tidy && \
 			go mod vendor
 
@@ -76,11 +75,15 @@ envtest-image:
 
 .PHONY: get-envtest-image-tag
 get-envtest-image-tag:
-	echo ${ENVTEST}@${ENVTEST_DIGEST}
+	echo $(ENVTEST):$(GITCOMMIT)
+
+.PHONY:
+envtest-image-push:
+	docker push digitalocean/k8s-env-test:$(GITCOMMIT)
 	
 .PHONY:
 integration-test:
-	TEST_IMAGE=${ENVTEST}@${ENVTEST_DIGEST} ./local/local-integration-test.sh all 
+	TEST_IMAGE=$(ENVTEST):$(GITCOMMIT) ./local/local-integration-test.sh all
 
 .PHONY:
 setup: 
@@ -88,7 +91,7 @@ setup:
 
 .PHONY:
 execute:
-	TEST_IMAGE=${ENVTEST}@${ENVTEST_DIGEST} ./local/local-integration-test.sh execute
+	TEST_IMAGE=$(ENVTEST):$(GITCOMMIT) ./local/local-integration-test.sh execute
 
 .PHONY:
 cleanup:
