@@ -1,5 +1,5 @@
 ARG GO_VERSION
-FROM golang:${GO_VERSION}-bullseye
+FROM golang:${GO_VERSION}-trixie
 
 ARG K8S_VERSION
 ARG ETCD_VERSION

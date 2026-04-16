@@ -19,111 +19,32 @@ limitations under the License.
 package fake
 
 import (
-	"context"
-
 	v1beta1 "github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	netboxv1beta1 "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned/typed/netbox/v1beta1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeNetBoxIPs implements NetBoxIPInterface
-type FakeNetBoxIPs struct {
+// fakeNetBoxIPs implements NetBoxIPInterface
+type fakeNetBoxIPs struct {
+	*gentype.FakeClientWithList[*v1beta1.NetBoxIP, *v1beta1.NetBoxIPList]
 	Fake *FakeNetboxV1beta1
-	ns   string
 }
 
-var netboxipsResource = v1beta1.SchemeGroupVersion.WithResource("netboxips")
-
-var netboxipsKind = v1beta1.SchemeGroupVersion.WithKind("NetBoxIP")
-
-// Get takes name of the netBoxIP, and returns the corresponding netBoxIP object, and an error if there is any.
-func (c *FakeNetBoxIPs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.NetBoxIP, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(netboxipsResource, c.ns, name), &v1beta1.NetBoxIP{})
-
-	if obj == nil {
-		return nil, err
+func newFakeNetBoxIPs(fake *FakeNetboxV1beta1, namespace string) netboxv1beta1.NetBoxIPInterface {
+	return &fakeNetBoxIPs{
+		gentype.NewFakeClientWithList[*v1beta1.NetBoxIP, *v1beta1.NetBoxIPList](
+			fake.Fake,
+			namespace,
+			v1beta1.SchemeGroupVersion.WithResource("netboxips"),
+			v1beta1.SchemeGroupVersion.WithKind("NetBoxIP"),
+			func() *v1beta1.NetBoxIP { return &v1beta1.NetBoxIP{} },
+			func() *v1beta1.NetBoxIPList { return &v1beta1.NetBoxIPList{} },
+			func(dst, src *v1beta1.NetBoxIPList) { dst.ListMeta = src.ListMeta },
+			func(list *v1beta1.NetBoxIPList) []*v1beta1.NetBoxIP { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1beta1.NetBoxIPList, items []*v1beta1.NetBoxIP) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1beta1.NetBoxIP), err
-}
-
-// List takes label and field selectors, and returns the list of NetBoxIPs that match those selectors.
-func (c *FakeNetBoxIPs) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.NetBoxIPList, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewListAction(netboxipsResource, netboxipsKind, c.ns, opts), &v1beta1.NetBoxIPList{})
-
-	if obj == nil {
-		return nil, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1beta1.NetBoxIPList{ListMeta: obj.(*v1beta1.NetBoxIPList).ListMeta}
-	for _, item := range obj.(*v1beta1.NetBoxIPList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested netBoxIPs.
-func (c *FakeNetBoxIPs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(netboxipsResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a netBoxIP and creates it.  Returns the server's representation of the netBoxIP, and an error, if there is any.
-func (c *FakeNetBoxIPs) Create(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, opts v1.CreateOptions) (result *v1beta1.NetBoxIP, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(netboxipsResource, c.ns, netBoxIP), &v1beta1.NetBoxIP{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1beta1.NetBoxIP), err
-}
-
-// Update takes the representation of a netBoxIP and updates it. Returns the server's representation of the netBoxIP, and an error, if there is any.
-func (c *FakeNetBoxIPs) Update(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, opts v1.UpdateOptions) (result *v1beta1.NetBoxIP, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(netboxipsResource, c.ns, netBoxIP), &v1beta1.NetBoxIP{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1beta1.NetBoxIP), err
-}
-
-// Delete takes name of the netBoxIP and deletes it. Returns an error if one occurs.
-func (c *FakeNetBoxIPs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(netboxipsResource, c.ns, name, opts), &v1beta1.NetBoxIP{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeNetBoxIPs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(netboxipsResource, c.ns, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1beta1.NetBoxIPList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched netBoxIP.
-func (c *FakeNetBoxIPs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.NetBoxIP, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(netboxipsResource, c.ns, name, pt, data, subresources...), &v1beta1.NetBoxIP{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1beta1.NetBoxIP), err
 }

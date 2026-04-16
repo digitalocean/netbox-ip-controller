@@ -19,9 +19,9 @@ IMAGE ?= "${NAME}:$(GITCOMMIT)"
 # Path to k8s-env-test image on Docker Hub
 ENVTEST := digitalocean/k8s-env-test
 
-K8S_VERSION := 1.30.11
-ETCD_VERSION := 3.5.0
-GO_VERSION := 1.22.0
+K8S_VERSION := 1.32.13
+ETCD_VERSION := 3.5.29
+GO_VERSION := 1.26.2
 
 ifeq ($(strip $(shell git status --porcelain 2>/dev/null)),)
 	GIT_TREE_STATE=clean
