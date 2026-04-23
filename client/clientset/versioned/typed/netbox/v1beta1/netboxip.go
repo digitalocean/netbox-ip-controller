@@ -19,15 +19,14 @@ limitations under the License.
 package v1beta1
 
 import (
-	"context"
-	"time"
+	context "context"
 
-	v1beta1 "github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
+	netboxv1beta1 "github.com/digitalocean/netbox-ip-controller/api/netbox/v1beta1"
 	scheme "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // NetBoxIPsGetter has a method to return a NetBoxIPInterface.
@@ -38,141 +37,32 @@ type NetBoxIPsGetter interface {
 
 // NetBoxIPInterface has methods to work with NetBoxIP resources.
 type NetBoxIPInterface interface {
-	Create(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, opts v1.CreateOptions) (*v1beta1.NetBoxIP, error)
-	Update(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, opts v1.UpdateOptions) (*v1beta1.NetBoxIP, error)
+	Create(ctx context.Context, netBoxIP *netboxv1beta1.NetBoxIP, opts v1.CreateOptions) (*netboxv1beta1.NetBoxIP, error)
+	Update(ctx context.Context, netBoxIP *netboxv1beta1.NetBoxIP, opts v1.UpdateOptions) (*netboxv1beta1.NetBoxIP, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1beta1.NetBoxIP, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1beta1.NetBoxIPList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*netboxv1beta1.NetBoxIP, error)
+	List(ctx context.Context, opts v1.ListOptions) (*netboxv1beta1.NetBoxIPList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.NetBoxIP, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *netboxv1beta1.NetBoxIP, err error)
 	NetBoxIPExpansion
 }
 
 // netBoxIPs implements NetBoxIPInterface
 type netBoxIPs struct {
-	client rest.Interface
-	ns     string
+	*gentype.ClientWithList[*netboxv1beta1.NetBoxIP, *netboxv1beta1.NetBoxIPList]
 }
 
 // newNetBoxIPs returns a NetBoxIPs
 func newNetBoxIPs(c *NetboxV1beta1Client, namespace string) *netBoxIPs {
 	return &netBoxIPs{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClientWithList[*netboxv1beta1.NetBoxIP, *netboxv1beta1.NetBoxIPList](
+			"netboxips",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *netboxv1beta1.NetBoxIP { return &netboxv1beta1.NetBoxIP{} },
+			func() *netboxv1beta1.NetBoxIPList { return &netboxv1beta1.NetBoxIPList{} },
+		),
 	}
-}
-
-// Get takes name of the netBoxIP, and returns the corresponding netBoxIP object, and an error if there is any.
-func (c *netBoxIPs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1beta1.NetBoxIP, err error) {
-	result = &v1beta1.NetBoxIP{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("netboxips").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of NetBoxIPs that match those selectors.
-func (c *netBoxIPs) List(ctx context.Context, opts v1.ListOptions) (result *v1beta1.NetBoxIPList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1beta1.NetBoxIPList{}
-	err = c.client.Get().
-		Namespace(c.ns).
-		Resource("netboxips").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested netBoxIPs.
-func (c *netBoxIPs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Namespace(c.ns).
-		Resource("netboxips").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a netBoxIP and creates it.  Returns the server's representation of the netBoxIP, and an error, if there is any.
-func (c *netBoxIPs) Create(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, opts v1.CreateOptions) (result *v1beta1.NetBoxIP, err error) {
-	result = &v1beta1.NetBoxIP{}
-	err = c.client.Post().
-		Namespace(c.ns).
-		Resource("netboxips").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(netBoxIP).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a netBoxIP and updates it. Returns the server's representation of the netBoxIP, and an error, if there is any.
-func (c *netBoxIPs) Update(ctx context.Context, netBoxIP *v1beta1.NetBoxIP, opts v1.UpdateOptions) (result *v1beta1.NetBoxIP, err error) {
-	result = &v1beta1.NetBoxIP{}
-	err = c.client.Put().
-		Namespace(c.ns).
-		Resource("netboxips").
-		Name(netBoxIP.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(netBoxIP).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the netBoxIP and deletes it. Returns an error if one occurs.
-func (c *netBoxIPs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("netboxips").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *netBoxIPs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Namespace(c.ns).
-		Resource("netboxips").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched netBoxIP.
-func (c *netBoxIPs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1beta1.NetBoxIP, err error) {
-	result = &v1beta1.NetBoxIP{}
-	err = c.client.Patch(pt).
-		Namespace(c.ns).
-		Resource("netboxips").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

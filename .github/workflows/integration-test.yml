@@ -6,43 +6,41 @@ on:
       - main
 
 jobs:
-
   integration_test:
     name: Integration test
     strategy:
       matrix:
-        go-version: [1.22.0]
+        go-version: [1.26.2]
         platform: [ubuntu-22.04]
 
     runs-on: ${{ matrix.platform }}
 
     steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5.0.1
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: false
 
-    - name: Set up Go
-      uses: actions/setup-go@v5.0.1
-      with:
-        go-version: ${{ matrix.go-version }}
-        cache: false
+      - name: Checkout current branch
+        uses: actions/checkout@v4.1.6
+        with:
+          fetch-depth: "0"
 
-    - name: Checkout current branch
-      uses: actions/checkout@v4.1.6
-      with:
-        fetch-depth: '0'
+      - name: Get testenv image tag
+        run: |
+          export TEST_IMAGE="$(make get-envtest-image-tag -s)"
+          echo "TEST_IMAGE=${TEST_IMAGE}" >> ${GITHUB_ENV}
 
-    - name: Get testenv image tag 
-      run : |
-        export TEST_IMAGE="$(make get-envtest-image-tag -s)"
-        echo "TEST_IMAGE=${TEST_IMAGE}" >> ${GITHUB_ENV}
-        
-    - name: Log in to the Docker Hub
-      uses: docker/login-action@v3.2.0
-      with:
-        username: ${{ secrets.DOCKER_HUB_USER }} 
-        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+      - name: Log in to the Docker Hub
+        uses: docker/login-action@v3.2.0
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-    # Build a new testenv image to use if and only if the Dockerfile or Makefile is changed in this PR
-    - name: Build image and push to Docker Hub
-      run : make envtest-image && make envtest-image-push
+      # Build a new testenv image to use if and only if the Dockerfile or Makefile is changed in this PR
+      - name: Build image and push to Docker Hub
+        run: make envtest-image && make envtest-image-push
 
-    - name: Run integration tests
-      run : ./scripts/integration-test.sh
+      - name: Run integration tests
+        run: ./scripts/integration-test.sh

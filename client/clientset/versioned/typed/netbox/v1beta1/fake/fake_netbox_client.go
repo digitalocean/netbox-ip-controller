@@ -29,7 +29,7 @@ type FakeNetboxV1beta1 struct {
 }
 
 func (c *FakeNetboxV1beta1) NetBoxIPs(namespace string) v1beta1.NetBoxIPInterface {
-	return &FakeNetBoxIPs{c, namespace}
+	return newFakeNetBoxIPs(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

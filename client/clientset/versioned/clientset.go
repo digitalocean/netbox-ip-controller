@@ -19,8 +19,8 @@ limitations under the License.
 package versioned
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	netboxv1beta1 "github.com/digitalocean/netbox-ip-controller/client/clientset/versioned/typed/netbox/v1beta1"
 	discovery "k8s.io/client-go/discovery"

@@ -1,11 +1,11 @@
 # Copyright 2022 DigitalOcean
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at:
-# 
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,16 +29,15 @@ jobs:
     name: Build and release image
     strategy:
       matrix:
-        go-version: [1.22.0]
+        go-version: [1.26.2]
         platform: [ubuntu-22.04]
 
     runs-on: ${{ matrix.platform }}
 
     steps:
-
       - name: Checkout current branch
         uses: actions/checkout@v4.1.6
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5.0.1
         with:
@@ -46,7 +45,7 @@ jobs:
           cache: false
 
       - name: Build image
-        run : IMAGE=${{ env.IMAGE_NAME }} make build-image
+        run: IMAGE=${{ env.IMAGE_NAME }} make build-image
 
       - name: Log in to the GitHub registry
         uses: docker/login-action@v3.2.0
@@ -56,20 +55,19 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push to GitHub registry
-        run : |
-              export GITHUB_TAG=${{ env.GITHUB_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-              docker tag ${{ env.IMAGE_NAME }} $GITHUB_TAG
-              docker push $GITHUB_TAG
+        run: |
+          export GITHUB_TAG=${{ env.GITHUB_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.IMAGE_NAME }} $GITHUB_TAG
+          docker push $GITHUB_TAG
 
       - name: Log in to the Docker Hub
         uses: docker/login-action@v3.2.0
         with:
-          username: ${{ secrets.DOCKER_HUB_USER }} 
+          username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Push to Docker Hub
-        run : |
-              export DOCKER_TAG=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-              docker tag ${{ env.IMAGE_NAME }} $DOCKER_TAG
-              docker push $DOCKER_TAG
-     
+        run: |
+          export DOCKER_TAG=${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.IMAGE_NAME }} $DOCKER_TAG
+          docker push $DOCKER_TAG
